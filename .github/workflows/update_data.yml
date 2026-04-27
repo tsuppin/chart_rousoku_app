@@ -1,0 +1,38 @@
+name: 株価データ自動更新
+
+on:
+  schedule:
+    # 毎日 21:00 UTC = 日本時間 翌 06:00 に実行
+    - cron: '0 21 * * *'
+  # 手動実行も可能にする
+  workflow_dispatch:
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: リポジトリをチェックアウト
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Python をセットアップ
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 依存ライブラリをインストール
+        run: pip install yfinance
+
+      - name: 株価データを取得
+        run: python fetch_data.py
+
+      - name: 変更があればコミット & プッシュ
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          # 差分がある場合のみコミット
+          git diff --cached --quiet || git commit -m "chore: 株価データ自動更新 $(date '+%Y-%m-%d')"
+          git push

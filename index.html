@@ -1,0 +1,1242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f1117">
+  <title>相場流 チャートめくり</title>
+  <meta name="description" content="日足ローソク足チャートで相場を学ぶトレーニングツール - 相場流チャートめくり">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+
+  <style>
+    /* =========================================================
+       CSS 変数（デザイントークン）
+    ========================================================= */
+    :root {
+      --bg:          #0f1117;
+      --panel:       #161b27;
+      --hover:       #1d2235;
+      --active:      #252b3e;
+      --border:      #2a2e42;
+      --border2:     #3a3f58;
+      --text:        #d1d4dc;
+      --dim:         #787b86;
+      --bright:      #ffffff;
+      --up:          #f23645;
+      --down:        #26a69a;
+      --accent:      #2962ff;
+      --accent2:     #3d73ff;
+      --green2:      #00897b;
+
+      /* 移動平均線カラー（相場流指定） */
+      --ma5:   #f23645;   /* 赤   */
+      --ma10:  #00c853;   /* 緑   */
+      --ma20:  #2196f3;   /* 青   */
+      --ma50:  #ab47bc;   /* 紫   */
+      --ma100: #ff9800;   /* 橙   */
+      --ma300: #fdd835;   /* 黄   */
+    }
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Sans JP', -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      user-select: none;
+    }
+
+    /* =========================================================
+       ヘッダー
+    ========================================================= */
+    #header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+      min-height: 52px;
+    }
+
+    #app-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent2);
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+
+    .vdiv {
+      width: 1px;
+      height: 28px;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+
+    /* 銘柄ボタン */
+    #stock-selector { display: flex; gap: 4px; flex-shrink: 0; }
+
+    .stock-btn {
+      background: var(--hover);
+      border: 1px solid var(--border);
+      color: var(--dim);
+      padding: 5px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+      transition: all 0.14s;
+      white-space: nowrap;
+    }
+    .stock-btn:hover  { background: var(--active); color: var(--text); }
+    .stock-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 500;
+    }
+
+    /* 価格情報エリア */
+    #price-area { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+
+    #stock-id { display: flex; flex-direction: column; line-height: 1.3; }
+    #s-code   { font-size: 11px; color: var(--dim); }
+    #s-name   { font-size: 13px; font-weight: 500; }
+
+    #price-group { display: flex; align-items: baseline; gap: 8px; }
+    #cur-price {
+      font-size: 22px;
+      font-weight: 700;
+      font-family: 'Roboto Mono', monospace;
+      letter-spacing: -1px;
+      min-width: 80px;
+    }
+    #price-chg { font-size: 12px; font-family: 'Roboto Mono', monospace; }
+
+    .ohlcv { display: flex; gap: 10px; }
+    .oitem  { display: flex; flex-direction: column; }
+    .olbl   { font-size: 9px; color: var(--dim); }
+    .oval   { font-size: 12px; font-family: 'Roboto Mono', monospace; }
+
+    .up   { color: var(--up)   !important; }
+    .down { color: var(--down) !important; }
+    .neu  { color: var(--text) !important; }
+
+    /* =========================================================
+       MA凡例バー
+    ========================================================= */
+    #ma-legend {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 3px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    #ma-legend .lbl { font-size: 11px; color: var(--dim); }
+
+    .ma-entry {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      padding: 2px 5px;
+      border-radius: 3px;
+      transition: background 0.12s;
+    }
+    .ma-entry:hover { background: var(--hover); }
+    .ma-entry.off   { opacity: 0.3; }
+
+    .ma-dash { width: 18px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+    .ma-entry span {
+      font-size: 11px;
+      font-family: 'Roboto Mono', monospace;
+      white-space: nowrap;
+    }
+
+    /* =========================================================
+       チャートラッパー
+    ========================================================= */
+    #chart-wrap {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #chart { width: 100%; height: 100%; }
+
+    /* ローディングオーバーレイ */
+    #loading {
+      position: absolute;
+      inset: 0;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      z-index: 100;
+    }
+    #loading.hidden { display: none; }
+    .loader-ring {
+      width: 44px; height: 44px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #load-msg { font-size: 14px; color: var(--dim); text-align: center; white-space: pre-line; line-height: 1.7; }
+
+    /* =========================================================
+       フッター（ナビゲーション）
+    ========================================================= */
+    #footer {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 7px 13px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--hover);
+      color: var(--text);
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.13s;
+      white-space: nowrap;
+    }
+    .btn:hover  { background: var(--active); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+    .btn:active { transform: translateY(1px); box-shadow: none; }
+
+    .btn.primary {
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 500;
+      box-shadow: 0 2px 10px rgba(41,98,255,.28);
+    }
+    .btn.primary:hover { background: linear-gradient(135deg, #5a82ff, var(--accent2)); box-shadow: 0 4px 14px rgba(41,98,255,.45); }
+
+    .btn.teal {
+      background: linear-gradient(135deg, #1b8c7a, var(--green2));
+      border-color: var(--green2);
+      color: #fff;
+    }
+    .btn.teal:hover { background: linear-gradient(135deg, #22a896, #1b8c7a); }
+
+    #date-badge {
+      font-family: 'Roboto Mono', monospace;
+      font-size: 13px;
+      padding: 7px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--hover);
+      min-width: 108px;
+      text-align: center;
+    }
+
+    /* 表示窓サイズ選択 */
+    #win-sel { display: flex; gap: 3px; margin-left: 4px; }
+    .wbtn {
+      padding: 4px 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--hover);
+      color: var(--dim);
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .wbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    #bar-info { margin-left: auto; font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--dim); }
+    #key-hint { font-size: 10px; color: var(--dim); margin-left: 6px; white-space: nowrap; }
+
+    /* 自動めくり */
+    #auto-area { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+    #btn-auto {
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 7px 14px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--hover); color: var(--text); font-size: 13px;
+      font-family: inherit; cursor: pointer; transition: all 0.13s; white-space: nowrap;
+    }
+    #btn-auto:hover { background: var(--active); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
+    #btn-auto.playing {
+      background: linear-gradient(135deg, #c62828, #e53935);
+      border-color: #e53935; color: #fff; font-weight: 500;
+      box-shadow: 0 2px 10px rgba(229,57,53,.35);
+      animation: pulseBtn 1.4s ease-in-out infinite;
+    }
+    @keyframes pulseBtn {
+      0%, 100% { box-shadow: 0 2px 10px rgba(229,57,53,.35); }
+      50%       { box-shadow: 0 2px 20px rgba(229,57,53,.7); }
+    }
+    .spd-btn {
+      padding: 4px 7px; border-radius: 4px; border: 1px solid var(--border);
+      background: var(--hover); color: var(--dim); font-size: 11px;
+      font-family: inherit; cursor: pointer; transition: all 0.12s;
+    }
+    .spd-btn.on { background: #37474f; border-color: #607d8b; color: #b0bec5; }
+
+    /* =========================================================
+       初期位置設定モーダル
+    ========================================================= */
+    .modal-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.75);
+      backdrop-filter: blur(6px);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-bg.open { display: flex; }
+
+    .modal-card {
+      background: var(--panel);
+      border: 1px solid var(--border2);
+      border-radius: 14px;
+      padding: 28px;
+      width: 420px;
+      max-width: 95vw;
+      box-shadow: 0 30px 80px rgba(0,0,0,.9);
+      animation: popIn .18s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    @keyframes popIn { from { opacity:0; transform:scale(.92); } to { opacity:1; transform:scale(1); } }
+
+    .m-h    { font-size: 15px; font-weight: 600; color: var(--bright); margin-bottom: 22px; }
+    .m-sec  { margin-bottom: 16px; }
+    .m-lbl  { font-size: 11px; color: var(--dim); display: block; margin-bottom: 6px; }
+
+    .m-input {
+      width: 100%;
+      background: var(--hover);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 7px;
+      font-size: 14px;
+      font-family: 'Roboto Mono', monospace;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .m-input:focus { border-color: var(--accent); }
+
+    .slider-row { display: flex; align-items: center; gap: 10px; }
+    .m-slider { flex: 1; accent-color: var(--accent); cursor: pointer; }
+    .slider-val { font-family: 'Roboto Mono', monospace; font-size: 11px; color: var(--dim); min-width: 70px; text-align: right; white-space: nowrap; }
+    .slider-prev { font-size: 11px; color: var(--accent2); margin-top: 5px; height: 16px; }
+
+    .m-acts { display: flex; gap: 8px; margin-top: 22px; }
+    .m-btn  {
+      flex: 1; padding: 9px; border-radius: 7px; border: 1px solid var(--border);
+      font-family: inherit; font-size: 13px; cursor: pointer; transition: all .12s;
+    }
+    .m-btn.cancel { background: var(--hover); color: var(--dim); }
+    .m-btn.cancel:hover { color: var(--text); }
+    .m-btn.ok { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+    .m-btn.ok:hover { background: var(--accent2); }
+
+    /* =========================================================
+       モバイル対応
+    ========================================================= */
+    /* タッチ操作のハイライトを消す */
+    * { -webkit-tap-highlight-color: transparent; }
+
+    /* スワイプヒント */
+    #swipe-hint {
+      position: absolute;
+      bottom: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(41,98,255,0.18);
+      border: 1px solid rgba(41,98,255,0.35);
+      color: var(--dim);
+      font-size: 11px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      pointer-events: none;
+      opacity: 1;
+      transition: opacity 1s;
+      white-space: nowrap;
+    }
+    #swipe-hint.hidden { opacity: 0; }
+
+    @media (max-width: 600px) {
+      /* ヘッダーをコンパクトに */
+      #header { padding: 5px 8px; gap: 6px; min-height: 44px; }
+      #app-title { font-size: 11px; }
+      .stock-btn { padding: 6px 8px; font-size: 11px; min-height: 36px; }
+      #price-area { gap: 8px; }
+      #cur-price { font-size: 18px; }
+      #price-chg { font-size: 11px; }
+      .olbl { font-size: 8px; }
+      .oval { font-size: 11px; }
+      .vdiv { display: none; }
+
+      /* MA凡例バーをスクロール可能に */
+      #ma-legend { flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px; gap: 6px; }
+      #ma-legend::-webkit-scrollbar { display: none; }
+      .ma-entry { padding: 4px 6px; flex-shrink: 0; }
+
+      /* フッターをモバイル向け2段組に */
+      #footer {
+        padding: 6px 8px;
+        gap: 5px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .btn { padding: 10px 14px; font-size: 14px; min-height: 44px; }
+      #btn-prev, #btn-next { flex: 1; }
+      #date-badge { font-size: 12px; padding: 8px 10px; min-width: 96px; min-height: 44px; display:flex; align-items:center; justify-content:center; }
+      #btn-auto { min-height: 44px; padding: 10px 14px; font-size: 14px; }
+      .spd-btn { padding: 8px 10px; font-size: 12px; min-height: 36px; }
+      .wbtn { padding: 8px 10px; font-size: 12px; min-height: 36px; }
+      #bar-info { font-size: 10px; }
+      #key-hint { display: none; } /* スマホではキーヒント非表示 */
+      #win-sel { gap: 4px; }
+      #auto-area { gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ====================================================
+     HEADER: 銘柄選択 + 価格情報
+==================================================== -->
+<div id="header">
+  <div id="app-title">相場流 チャートめくり</div>
+  <div class="vdiv"></div>
+
+  <div id="stock-selector">
+    <button class="stock-btn active" data-code="1801" onclick="switchStock('1801')">1801 大成建設</button>
+    <button class="stock-btn"        data-code="3436" onclick="switchStock('3436')">3436 SUMCO</button>
+    <button class="stock-btn"        data-code="9684" onclick="switchStock('9684')">9684 スクエニHD</button>
+  </div>
+
+  <div class="vdiv"></div>
+
+  <div id="price-area">
+    <div id="stock-id">
+      <span id="s-code">----</span>
+      <span id="s-name">----</span>
+    </div>
+    <div id="price-group">
+      <span id="cur-price" class="neu">---</span>
+      <span id="price-chg" class="neu">---</span>
+    </div>
+    <div class="ohlcv">
+      <div class="oitem"><span class="olbl">高値</span><span class="oval" id="v-high">---</span></div>
+      <div class="oitem"><span class="olbl">安値</span><span class="oval" id="v-low">---</span></div>
+      <div class="oitem"><span class="olbl">始値</span><span class="oval" id="v-open">---</span></div>
+      <div class="oitem"><span class="olbl">終値</span><span class="oval" id="v-close">---</span></div>
+      <div class="oitem"><span class="olbl">出来高</span><span class="oval" id="v-vol">---</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ====================================================
+     MA 凡例バー（クリックでON/OFF）
+==================================================== -->
+<div id="ma-legend">
+  <span class="lbl">MA</span>
+  <div class="ma-entry" id="mae-5"   onclick="toggleMA(5)">
+    <div class="ma-dash" style="background:var(--ma5)"></div>
+    <span id="ma5t"   style="color:var(--ma5)"  >MA5:---</span>
+  </div>
+  <div class="ma-entry" id="mae-10"  onclick="toggleMA(10)">
+    <div class="ma-dash" style="background:var(--ma10)"></div>
+    <span id="ma10t"  style="color:var(--ma10)" >MA10:---</span>
+  </div>
+  <div class="ma-entry" id="mae-20"  onclick="toggleMA(20)">
+    <div class="ma-dash" style="background:var(--ma20)"></div>
+    <span id="ma20t"  style="color:var(--ma20)" >MA20:---</span>
+  </div>
+  <div class="ma-entry" id="mae-50"  onclick="toggleMA(50)">
+    <div class="ma-dash" style="background:var(--ma50)"></div>
+    <span id="ma50t"  style="color:var(--ma50)" >MA50:---</span>
+  </div>
+  <div class="ma-entry" id="mae-100" onclick="toggleMA(100)">
+    <div class="ma-dash" style="background:var(--ma100)"></div>
+    <span id="ma100t" style="color:var(--ma100)">MA100:---</span>
+  </div>
+  <div class="ma-entry" id="mae-300" onclick="toggleMA(300)">
+    <div class="ma-dash" style="background:var(--ma300)"></div>
+    <span id="ma300t" style="color:var(--ma300)">MA300:---</span>
+  </div>
+
+  <div class="vdiv" style="height:14px; margin:0 4px"></div>
+  <span class="lbl">表示</span>
+
+  <!-- ローソク足 表示/非表示 -->
+  <div class="ma-entry" id="tog-candle" onclick="toggleCandle()">
+    <div style="width:14px; height:10px; border:1.5px solid #f23645; background:rgba(242,54,69,0.25); border-radius:1px; flex-shrink:0"></div>
+    <span style="color:var(--text); font-size:11px; font-family:'Roboto Mono',monospace">ローソク</span>
+  </div>
+
+  <!-- 終値ライン 表示/非表示 -->
+  <div class="ma-entry off" id="tog-close" onclick="toggleClose()">
+    <div class="ma-dash" style="background:#e8e8e8"></div>
+    <span id="close-lbl" style="color:#e8e8e8; font-size:11px; font-family:'Roboto Mono',monospace">終値</span>
+  </div>
+</div>
+
+<!-- ====================================================
+     チャート本体
+==================================================== -->
+<div id="chart-wrap">
+  <div id="loading">
+    <div class="loader-ring"></div>
+    <div id="load-msg">データ読込中...</div>
+  </div>
+  <div id="chart"></div>
+  <div id="swipe-hint">← 左スワイプ：前日　右スワイプ：次日 →</div>
+</div>
+
+<!-- ====================================================
+     フッター: ナビゲーション + 表示設定
+==================================================== -->
+<div id="footer">
+  <!-- 日足バッジ -->
+  <div style="font-size:11px; font-weight:700; color:#fff; background:var(--accent); padding:4px 8px; border-radius:4px; letter-spacing:.5px; flex-shrink:0">日足</div>
+
+  <button class="btn"         id="btn-prev" onclick="goPrev()">◀ 前日</button>
+  <button class="btn primary" id="btn-next" onclick="goNext()">次日 ▶</button>
+
+  <!-- 自動めくり -->
+  <div id="auto-area">
+    <button id="btn-auto" onclick="toggleAuto()" title="スペースキーでも切替">▶ 自動</button>
+    <button class="spd-btn on" data-spd="1000" onclick="setAutoSpeed(1000)">遅</button>
+    <button class="spd-btn"    data-spd="500"  onclick="setAutoSpeed(500)">普通</button>
+    <button class="spd-btn"    data-spd="200"  onclick="setAutoSpeed(200)">速</button>
+  </div>
+
+  <div id="date-badge">----/--/--</div>
+
+  <button class="btn"  onclick="goLatest()">最新へ ⏭</button>
+  <button class="btn teal" onclick="openInitModal()">初期位置設定</button>
+
+  <div class="vdiv" style="height:24px"></div>
+
+  <div id="win-sel">
+    <button class="wbtn"    onclick="setWindow(60)">3ヶ月</button>
+    <button class="wbtn on" onclick="setWindow(120)">6ヶ月</button>
+    <button class="wbtn"    onclick="setWindow(240)">1年</button>
+  </div>
+
+  <!-- ズームボタン -->
+  <div style="display:flex; gap:3px; align-items:center;">
+    <button class="wbtn" id="btn-zoom-in"  onclick="zoomIn()"  title="拡大">&#xFF0B;</button>
+    <button class="wbtn" id="btn-zoom-out" onclick="zoomOut()" title="縮小">&#xFF0D;</button>
+    <button class="wbtn" id="btn-zoom-fit" onclick="zoomFit()" title="ウィンドウサイズにフィット">フィット</button>
+  </div>
+
+  <div id="bar-info">--/-- バー</div>
+  <div id="key-hint">← →: 移動　Space: 自動　＋ー: ズーム　0: フィット</div>
+</div>
+
+<!-- ====================================================
+     初期位置設定ダイアログ
+==================================================== -->
+<div class="modal-bg" id="init-modal">
+  <div class="modal-card">
+    <div class="m-h">📅 初期表示位置を設定</div>
+
+    <div class="m-sec">
+      <label class="m-lbl">開始日（この日を最後に表示する日として設定）</label>
+      <input type="date" class="m-input" id="m-date">
+    </div>
+
+    <div class="m-sec">
+      <label class="m-lbl">または 最新から何日前か（スライダー）</label>
+      <div class="slider-row">
+        <input type="range" class="m-slider" id="m-slider" min="0" max="2500" value="500"
+               oninput="onSlider(this.value)">
+        <span class="slider-val" id="m-slbl">500日前</span>
+      </div>
+      <div class="slider-prev" id="m-sprv"></div>
+    </div>
+
+    <div class="m-acts">
+      <button class="m-btn cancel" onclick="closeModal()">キャンセル</button>
+      <button class="m-btn ok"     onclick="applyInit()">この位置から開始</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================================================
+     JavaScript: チャートロジック
+==================================================== -->
+<script>
+'use strict';
+
+/* ======================================================
+   定数・設定
+====================================================== */
+const STOCK_INFO = {
+  '1801': { name: '大成建設',               fullName: '大成建設株式会社' },
+  '3436': { name: 'SUMCO',                  fullName: 'SUMCO Corporation' },
+  '9684': { name: 'スクウェア・エニックス HD', fullName: 'Square Enix Holdings' },
+};
+
+// MA設定（期間・色・シリーズキー）
+const MA_DEFS = [
+  { p: 5,   color: '#f23645', label: 'MA5'   },
+  { p: 10,  color: '#00c853', label: 'MA10'  },
+  { p: 20,  color: '#2196f3', label: 'MA20'  },
+  { p: 50,  color: '#ab47bc', label: 'MA50'  },
+  { p: 100, color: '#ff9800', label: 'MA100' },
+  { p: 300, color: '#fdd835', label: 'MA300' },
+];
+
+/* ======================================================
+   状態変数
+====================================================== */
+let chart        = null;   // Lightweight Charts インスタンス
+let candleSeries = null;   // ローソク足シリーズ
+let closeSeries  = null;   // 終値ラインシリーズ（白）
+const maSeries   = {};     // { period: series }
+const maVisible  = {};     // { period: bool }
+
+let allCandles = [];       // 全ローソクデータ配列
+let allMAs     = {};       // { period: [{time,value}] }
+let cursor     = 0;        // 現在の最終表示バーのインデックス
+let winSize    = 120;      // 表示バー数
+
+let candleVisible = true;  // ローソク足 表示状態
+let closeVisible  = false; // 終値ライン 表示状態
+let currentBarSpacing = 6; // 現在のズーム（barSpacing）
+const MIN_BAR_SPACING = 1.5;
+const MAX_BAR_SPACING = 80;
+
+let currentCode = '1801';
+const dataCache = {};      // { code: { candles, mas, info } }
+
+// MA ON/OFF 初期値
+MA_DEFS.forEach(d => { maVisible[d.p] = true; });
+
+/* ======================================================
+   チャート初期化
+====================================================== */
+function initChart() {
+  const wrap = document.getElementById('chart-wrap');
+  const el   = document.getElementById('chart');
+
+  chart = LightweightCharts.createChart(el, {
+    width:  wrap.clientWidth,
+    height: wrap.clientHeight,
+    layout: {
+      background: { type: 'solid', color: '#0f1117' },
+      textColor:  '#787b86',
+      fontFamily: "'Roboto Mono', monospace",
+      fontSize:   11,
+    },
+    grid: {
+      vertLines: { color: 'rgba(42,46,66,.65)' },
+      horzLines: { color: 'rgba(42,46,66,.65)' },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: '#4a5070', labelBackgroundColor: '#2962ff' },
+      horzLine: { color: '#4a5070', labelBackgroundColor: '#2962ff' },
+    },
+    rightPriceScale: { borderColor: '#2a2e42' },
+    timeScale: {
+      borderColor:    '#2a2e42',
+      timeVisible:    true,
+      secondsVisible: false,
+      barSpacing:     6,
+      rightOffset:    3,
+    },
+  });
+
+  /* ローソク足シリーズ */
+  candleSeries = chart.addCandlestickSeries({
+    upColor:         '#f23645',
+    downColor:       '#26a69a',
+    borderUpColor:   '#f23645',
+    borderDownColor: '#26a69a',
+    wickUpColor:     '#f23645',
+    wickDownColor:   '#26a69a',
+    priceLineVisible: false,
+  });
+
+  /* MA シリーズ */
+  for (const d of MA_DEFS) {
+    maSeries[d.p] = chart.addLineSeries({
+      color:                   d.color,
+      lineWidth:               1,
+      priceLineVisible:        false,
+      lastValueVisible:        false,
+      crosshairMarkerVisible:  false,
+    });
+  }
+
+  /* 終値ライン（白）- デフォルト非表示 */
+  closeSeries = chart.addLineSeries({
+    color:                  '#e8e8e8',
+    lineWidth:              1,
+    priceLineVisible:       false,
+    lastValueVisible:       false,
+    crosshairMarkerVisible: false,
+    visible:                false,
+  });
+
+  /* クロスヘア移動イベント */
+  chart.subscribeCrosshairMove(onCrosshair);
+
+  /* リサイズ対応 */
+  const ro = new ResizeObserver(() => {
+    chart.resize(wrap.clientWidth, wrap.clientHeight);
+  });
+  ro.observe(wrap);
+}
+
+/* ======================================================
+   クロスヘア: ツールチップ更新
+====================================================== */
+function onCrosshair(param) {
+  if (!param || !param.time) {
+    showBarInfo(cursor); // ホバーが外れたら現在バーに戻す
+    return;
+  }
+  // ローソク表示中ならローソクデータ、非表示なら終値ラインからOHLC取得
+  const cd = candleVisible
+    ? param.seriesData.get(candleSeries)
+    : param.seriesData.get(closeSeries);
+  if (cd) {
+    // 終値ラインの場合は {time, value} 形式なので変換
+    const candle = cd.open !== undefined ? cd : {
+      time: cd.time, open: cd.value, high: cd.value, low: cd.value, close: cd.value
+    };
+    // allCandles から正しいOHLCVを引く
+    const idx = allCandles.findIndex(x => x.time === (cd.time || param.time));
+    if (idx >= 0) displayOHLC(allCandles[idx]);
+  }
+
+  for (const d of MA_DEFS) {
+    const mv = param.seriesData.get(maSeries[d.p]);
+    setMAText(d.p, mv ? mv.value : null);
+  }
+}
+
+function setMAText(period, val) {
+  const el = document.getElementById(`ma${period}t`);
+  if (!el) return;
+  el.textContent = val != null
+    ? `MA${period}:${(+val).toFixed(1)}`
+    : `MA${period}:---`;
+}
+
+/* ======================================================
+   MA計算（スライディングウィンドウ）
+====================================================== */
+function calcMA(candles, period) {
+  const out = [];
+  let sum = 0;
+  for (let i = 0; i < candles.length; i++) {
+    sum += candles[i].close;
+    if (i >= period) sum -= candles[i - period].close;
+    if (i >= period - 1) {
+      out.push({
+        time:  candles[i].time,
+        value: Math.round(sum / period * 10) / 10,
+      });
+    }
+  }
+  return out;
+}
+
+/* ======================================================
+   データ読み込み（初回はfetch、2回目以降はキャッシュ）
+====================================================== */
+async function loadData(code) {
+  if (dataCache[code]) return dataCache[code];
+
+  setLoading(true, `${code} データ読込中...`);
+
+  const res = await fetch(`data/${code}.json`);
+  if (!res.ok) {
+    throw new Error(
+      `data/${code}.json が見つかりません。\n` +
+      `先に fetch_data.py を実行してください:\n  python fetch_data.py`
+    );
+  }
+  const json = await res.json();
+  const candles = json.candles;
+
+  const mas = {};
+  for (const d of MA_DEFS) {
+    mas[d.p] = calcMA(candles, d.p);
+  }
+
+  dataCache[code] = { candles, mas, info: json };
+  return dataCache[code];
+}
+
+/* ======================================================
+   銘柄切替
+====================================================== */
+async function switchStock(code) {
+  currentCode = code;
+
+  // ボタン状態更新
+  document.querySelectorAll('.stock-btn')
+          .forEach(b => b.classList.toggle('active', b.dataset.code === code));
+
+  try {
+    const data = await loadData(code);
+    allCandles  = data.candles;
+    allMAs      = data.mas;
+
+    // 最新バーを初期カーソルに
+    cursor = allCandles.length - 1;
+
+    // 全データをセット
+    refreshChart();
+
+    // ヘッダー更新
+    const info = STOCK_INFO[code];
+    document.getElementById('s-code').textContent = code;
+    document.getElementById('s-name').textContent = info.name;
+
+    showBarInfo(cursor);
+    setLoading(false);
+
+  } catch (err) {
+    setLoading(true, `❌ ${err.message}`);
+  }
+}
+
+/* ======================================================
+   チャートデータ全更新（goPrev や初期ロード時）
+====================================================== */
+function refreshChart() {
+  const sliced = allCandles.slice(0, cursor + 1);
+
+  // ローソク足: 0 ～ cursor
+  candleSeries.setData(sliced);
+
+  // 終値ライン
+  closeSeries.setData(sliced.map(c => ({ time: c.time, value: c.close })));
+
+  // MA線: calcMA の配列インデックスと allCandles の対応
+  //   allMAs[p][k] は allCandles[k + p - 1] に対応
+  //   cursor = n のとき k <= n - p + 1 なので slice(0, n-p+2)
+  for (const d of MA_DEFS) {
+    const maEnd = Math.max(0, cursor - d.p + 2);
+    maSeries[d.p].setData(allMAs[d.p].slice(0, maEnd));
+  }
+
+  updateVisibleRange();
+}
+
+/* ======================================================
+   表示範囲を winSize バー分に調整（初期ロード・ウィンドウ変更時のみ）
+====================================================== */
+function updateVisibleRange() {
+  const endIdx   = cursor;
+  const startIdx = Math.max(0, endIdx - winSize + 1);
+  try {
+    chart.timeScale().setVisibleRange({
+      from: allCandles[startIdx].time,
+      to:   allCandles[endIdx].time,
+    });
+    // setVisibleRange後はbarSpacingが自動調整されるので追跡値を更新
+    const w = document.getElementById('chart-wrap').clientWidth;
+    currentBarSpacing = Math.max(MIN_BAR_SPACING, (w - 80) / winSize);
+  } catch (_) { /* 起動直後などでエラーが出る場合は無視 */ }
+}
+
+/** ズームを保持したまま最新バーを画面右端にスクロール */
+function scrollKeepZoom() {
+  try { chart.timeScale().scrollToRealTime(); } catch (_) {}
+}
+
+/* ======================================================
+   ナビゲーション
+====================================================== */
+
+/** 1日進む（高速: update()を使用、ズーム保持） */
+function goNext() {
+  if (!allCandles.length || cursor >= allCandles.length - 1) return;
+  cursor++;
+  const c = allCandles[cursor];
+
+  // ローソク足は最末尾に1本追加（O(1)）
+  candleSeries.update(c);
+
+  // 終値ラインも1点追加
+  closeSeries.update({ time: c.time, value: c.close });
+
+  // MA各線: 新しい1点が利用可能なら追加（O(1)）
+  for (const d of MA_DEFS) {
+    const maIdx = cursor - d.p + 1;
+    if (maIdx >= 0 && maIdx < allMAs[d.p].length) {
+      maSeries[d.p].update(allMAs[d.p][maIdx]);
+    }
+  }
+
+  // ズームを保持したまま最新バーを画面右にアライン
+  scrollKeepZoom();
+  showBarInfo(cursor);
+}
+
+/** 1日戻る（ズーム保持） */
+function goPrev() {
+  if (!allCandles.length) return;
+  if (cursor <= 0) return;
+  cursor--;
+
+  // データを切り詰めて再セット（setDataはバックワード時に必須）
+  const sliced = allCandles.slice(0, cursor + 1);
+  candleSeries.setData(sliced);
+  closeSeries.setData(sliced.map(c => ({ time: c.time, value: c.close })));
+  for (const d of MA_DEFS) {
+    const maEnd = Math.max(0, cursor - d.p + 2);
+    maSeries[d.p].setData(allMAs[d.p].slice(0, maEnd));
+  }
+
+  // ズームを保持したまま最新バーにスクロール
+  scrollKeepZoom();
+  showBarInfo(cursor);
+}
+
+/** 最新バーへジャンプ */
+function goLatest() {
+  if (!allCandles.length) return;
+  cursor = allCandles.length - 1;
+  refreshChart();
+  showBarInfo(cursor);
+}
+
+/* ======================================================
+   表示窓サイズ変更
+====================================================== */
+function setWindow(size) {
+  winSize = size;
+  const labels = { 60: '3ヶ月', 120: '6ヶ月', 240: '1年' };
+  document.querySelectorAll('.wbtn')
+          .forEach(b => b.classList.toggle('on', b.textContent.trim() === labels[size]));
+  // winSize変更時はsetVisibleRangeで初期化（currentBarSpacingも更新される）
+  updateVisibleRange();
+}
+
+/* ======================================================
+   OHLCV 表示更新
+====================================================== */
+function displayOHLC(c) {
+  // 前日終値で騰落計算
+  const idx       = allCandles.findIndex(x => x.time === c.time);
+  const prevClose = idx > 0 ? allCandles[idx - 1].close : c.close;
+  const change    = c.close - prevClose;
+  const pct       = prevClose ? (change / prevClose * 100) : 0;
+
+  const cls = change > 0 ? 'up' : (change < 0 ? 'down' : 'neu');
+
+  const priceEl = document.getElementById('cur-price');
+  const chgEl   = document.getElementById('price-chg');
+  priceEl.className = cls;
+  chgEl.className   = cls;
+
+  priceEl.textContent = c.close.toLocaleString();
+  chgEl.textContent   =
+    `${change >= 0 ? '+' : ''}${change.toFixed(1)}（${change >= 0 ? '+' : ''}${pct.toFixed(2)}%）`;
+
+  document.getElementById('v-high').textContent  = c.high.toLocaleString();
+  document.getElementById('v-low').textContent   = c.low.toLocaleString();
+  document.getElementById('v-open').textContent  = c.open.toLocaleString();
+  document.getElementById('v-close').textContent = c.close.toLocaleString();
+
+  const vol = c.volume;
+  document.getElementById('v-vol').textContent =
+    vol >= 10000 ? `${(vol / 10000).toFixed(1)}万株` : `${vol.toLocaleString()}株`;
+}
+
+/** 指定インデックスのバー情報を表示 */
+function showBarInfo(idx) {
+  if (!allCandles.length) return;
+  const c = allCandles[idx];
+  if (!c) return;
+
+  displayOHLC(c);
+  document.getElementById('date-badge').textContent = c.time;
+  document.getElementById('bar-info').textContent   =
+    `${(idx + 1).toLocaleString()} / ${allCandles.length.toLocaleString()} バー`;
+
+  // MA凡例の値更新（二分探索でcursor時点の値を探す）
+  for (const d of MA_DEFS) {
+    const arr   = allMAs[d.p];
+    if (!arr || !arr.length) { setMAText(d.p, null); continue; }
+    // cursor 時点の MA インデックス
+    const maIdx = idx - d.p + 1;
+    if (maIdx >= 0 && maIdx < arr.length) {
+      setMAText(d.p, arr[maIdx].value);
+    } else {
+      setMAText(d.p, null);
+    }
+  }
+}
+
+/* ======================================================
+   ローディング表示
+====================================================== */
+function setLoading(show, msg = '') {
+  const el = document.getElementById('loading');
+  el.classList.toggle('hidden', !show);
+  if (msg) document.getElementById('load-msg').textContent = msg;
+}
+
+/* ======================================================
+   MA ON/OFF 切替
+====================================================== */
+function toggleMA(period) {
+  maVisible[period] = !maVisible[period];
+  maSeries[period].applyOptions({ visible: maVisible[period] });
+  document.getElementById(`mae-${period}`).classList.toggle('off', !maVisible[period]);
+}
+
+/** ローソク足 表示/非表示 */
+function toggleCandle() {
+  candleVisible = !candleVisible;
+  candleSeries.applyOptions({ visible: candleVisible });
+  document.getElementById('tog-candle').classList.toggle('off', !candleVisible);
+}
+
+/** 終値ライン（白）表示/非表示 */
+function toggleClose() {
+  closeVisible = !closeVisible;
+  closeSeries.applyOptions({ visible: closeVisible });
+  document.getElementById('tog-close').classList.toggle('off', !closeVisible);
+}
+
+/* ======================================================
+   ズーム操作（barSpacingを変更しズーム保持）
+====================================================== */
+function zoomIn() {
+  currentBarSpacing = Math.min(currentBarSpacing * 1.4, MAX_BAR_SPACING);
+  chart.timeScale().applyOptions({ barSpacing: currentBarSpacing });
+  // 最新バーが画面内に再表示されるようにスクロール
+  try { chart.timeScale().scrollToRealTime(); } catch (_) {}
+}
+
+function zoomOut() {
+  currentBarSpacing = Math.max(currentBarSpacing / 1.4, MIN_BAR_SPACING);
+  chart.timeScale().applyOptions({ barSpacing: currentBarSpacing });
+  try { chart.timeScale().scrollToRealTime(); } catch (_) {}
+}
+
+/** 現在の winSize にピッタリと入るズームにリセット */
+function zoomFit() {
+  updateVisibleRange();
+}
+
+/* ======================================================
+   初期位置設定モーダル
+====================================================== */
+function openInitModal() {
+  if (!allCandles.length) return;
+
+  const slider = document.getElementById('m-slider');
+  const daysB  = allCandles.length - 1 - cursor;
+  slider.max   = allCandles.length - 1;
+  slider.value = daysB;
+
+  document.getElementById('m-date').value = allCandles[cursor].time;
+  document.getElementById('m-date').min   = allCandles[0].time;
+  document.getElementById('m-date').max   = allCandles[allCandles.length - 1].time;
+  document.getElementById('m-slbl').textContent = `${daysB}日前`;
+  document.getElementById('m-sprv').textContent = `→ 表示最終日: ${allCandles[cursor].time}`;
+
+  document.getElementById('init-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('init-modal').classList.remove('open');
+}
+
+function onSlider(val) {
+  const daysB = parseInt(val);
+  const tgtIdx = Math.max(winSize, allCandles.length - 1 - daysB);
+  document.getElementById('m-slbl').textContent = `${daysB}日前`;
+  document.getElementById('m-sprv').textContent = `→ 表示最終日: ${allCandles[tgtIdx].time}`;
+  document.getElementById('m-date').value       = allCandles[tgtIdx].time;
+}
+
+function applyInit() {
+  const dateStr = document.getElementById('m-date').value;
+  if (!dateStr) { closeModal(); return; }
+
+  // 入力日以降で最も近いインデックスを検索
+  let idx = allCandles.findIndex(c => c.time >= dateStr);
+  if (idx < 0) idx = allCandles.length - 1;
+
+  cursor = Math.max(winSize, Math.min(idx, allCandles.length - 1));
+  refreshChart();
+  showBarInfo(cursor);
+  closeModal();
+}
+
+/* ======================================================
+   自動めくり
+====================================================== */
+let autoTimer   = null;
+let autoSpeed   = 1000; // ms
+
+function toggleAuto() {
+  if (autoTimer) {
+    stopAuto();
+  } else {
+    startAuto();
+  }
+}
+
+function startAuto() {
+  if (autoTimer) return;
+  if (!allCandles.length) return;
+  const btn = document.getElementById('btn-auto');
+  btn.textContent = '■ 停止';
+  btn.classList.add('playing');
+  autoTimer = setInterval(() => {
+    if (cursor >= allCandles.length - 1) {
+      stopAuto(); // 最新日に達したら停止
+      return;
+    }
+    goNext();
+  }, autoSpeed);
+}
+
+function stopAuto() {
+  clearInterval(autoTimer);
+  autoTimer = null;
+  const btn = document.getElementById('btn-auto');
+  btn.textContent = '▶ 自動';
+  btn.classList.remove('playing');
+}
+
+function setAutoSpeed(ms) {
+  autoSpeed = ms;
+  document.querySelectorAll('.spd-btn').forEach(b => {
+    b.classList.toggle('on', parseInt(b.dataset.spd) === ms);
+  });
+  // 再生中なら速度を即時反映（タイマー再起動）
+  if (autoTimer) {
+    stopAuto();
+    startAuto();
+  }
+}
+
+/* ======================================================
+   キーボードショートカット
+====================================================== */
+document.addEventListener('keydown', e => {
+  // テキスト入力中は無視
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+
+  switch (e.key) {
+    case ' ':
+      e.preventDefault(); toggleAuto(); break;
+    case 'ArrowRight':
+    case 'Enter':
+      e.preventDefault(); stopAuto(); goNext(); break;
+    case 'ArrowLeft':
+      e.preventDefault(); stopAuto(); goPrev(); break;
+    case 'End':
+      e.preventDefault(); stopAuto(); goLatest(); break;
+    case 'Escape':
+      stopAuto(); closeModal(); break;
+    // ズームショートカット
+    case '+': case '=': case ';':
+      e.preventDefault(); zoomIn(); break;
+    case '-': case '_':
+      e.preventDefault(); zoomOut(); break;
+    case '0':
+      e.preventDefault(); zoomFit(); break;
+  }
+});
+
+// モーダル背景クリックで閉じる
+document.getElementById('init-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+/* ======================================================
+   タッチスワイプ（モバイル対応）
+====================================================== */
+(function() {
+  const wrap = document.getElementById('chart-wrap');
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
+  const SWIPE_MIN_X   = 40;  // px: 最小水平移動量
+  const SWIPE_MAX_Y   = 60;  // px: 縦方向の許容誤差
+  const SWIPE_MAX_MS  = 400; // ms: 最大所要時間
+
+  wrap.addEventListener('touchstart', e => {
+    touchStartX    = e.touches[0].clientX;
+    touchStartY    = e.touches[0].clientY;
+    touchStartTime = Date.now();
+  }, { passive: true });
+
+  wrap.addEventListener('touchend', e => {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    const dt = Date.now() - touchStartTime;
+
+    if (dt > SWIPE_MAX_MS) return;       // 遅すぎるタッチは無視
+    if (Math.abs(dx) < SWIPE_MIN_X) return; // 移動量不足
+    if (Math.abs(dy) > SWIPE_MAX_Y) return; // 縦スクロールは無視
+
+    if (dx < 0) {
+      // 左スワイプ → 次日
+      stopAuto();
+      goNext();
+    } else {
+      // 右スワイプ → 前日
+      stopAuto();
+      goPrev();
+    }
+  }, { passive: true });
+
+  // 初回起動時にヒントを表示して3秒後に隐す
+  const hint = document.getElementById('swipe-hint');
+  setTimeout(() => hint.classList.add('hidden'), 3000);
+})();
+
+/* ======================================================
+   エントリポイント
+====================================================== */
+initChart();
+switchStock('1801');
+</script>
+</body>
+</html>
