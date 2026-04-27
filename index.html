@@ -85,27 +85,23 @@
       flex-shrink: 0;
     }
 
-    /* 銘柄ボタン */
-    #stock-selector { display: flex; gap: 4px; flex-shrink: 0; }
-
-    .stock-btn {
-      background: var(--hover);
-      border: 1px solid var(--border);
-      color: var(--dim);
-      padding: 5px 10px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 12px;
-      font-family: inherit;
-      transition: all 0.14s;
-      white-space: nowrap;
+    /* 銘柄セレクター */
+    #stock-selector { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
+    #stock-search {
+      background: var(--hover); border: 1px solid var(--border); color: var(--text);
+      padding: 5px 8px; border-radius: 5px; font-size: 12px; font-family: inherit;
+      width: 110px; outline: none; transition: border-color .15s;
     }
-    .stock-btn:hover  { background: var(--active); color: var(--text); }
-    .stock-btn.active {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-      font-weight: 500;
+    #stock-search:focus { border-color: var(--accent); }
+    #stock-select {
+      background: var(--hover); border: 1px solid var(--border); color: var(--text);
+      padding: 5px 8px; border-radius: 5px; font-size: 12px; font-family: inherit;
+      max-width: 200px; outline: none; cursor: pointer; transition: border-color .15s;
+    }
+    #stock-select:focus { border-color: var(--accent); }
+    @media (max-width:600px) {
+      #stock-search { width: 80px; font-size: 11px; }
+      #stock-select { max-width: 140px; font-size: 11px; }
     }
 
     /* 価格情報エリア */
@@ -438,9 +434,8 @@
   <div class="vdiv"></div>
 
   <div id="stock-selector">
-    <button class="stock-btn active" data-code="1801" onclick="switchStock('1801')">1801 大成建設</button>
-    <button class="stock-btn"        data-code="3436" onclick="switchStock('3436')">3436 SUMCO</button>
-    <button class="stock-btn"        data-code="9684" onclick="switchStock('9684')">9684 スクエニHD</button>
+    <input id="stock-search" type="text" placeholder="コード/名前" oninput="filterStocks(this.value)">
+    <select id="stock-select" onchange="switchStock(this.value)"></select>
   </div>
 
   <div class="vdiv"></div>
@@ -603,9 +598,101 @@
    定数・設定
 ====================================================== */
 const STOCK_INFO = {
-  '1801': { name: '大成建設',               fullName: '大成建設株式会社' },
-  '3436': { name: 'SUMCO',                  fullName: 'SUMCO Corporation' },
-  '9684': { name: 'スクウェア・エニックス HD', fullName: 'Square Enix Holdings' },
+  '1332':{'name':'マルハニチロ'},      '1333':{'name':'ニッスイ'},
+  '1605':{'name':'INPEX'},             '1801':{'name':'大成建設'},
+  '1802':{'name':'大林組'},            '1803':{'name':'清水建設'},
+  '1808':{'name':'長谷工コーポレーション'},'1812':{'name':'鹿島建設'},
+  '1925':{'name':'大和ハウス工業'},    '1928':{'name':'積水ハウス'},
+  '2002':{'name':'日清製粉GHD'},       '2269':{'name':'明治HD'},
+  '2282':{'name':'日本ハム'},          '2501':{'name':'サッポロHD'},
+  '2502':{'name':'アサヒGHD'},         '2503':{'name':'キリンHD'},
+  '2531':{'name':'宝HD'},              '2801':{'name':'キッコーマン'},
+  '2802':{'name':'味の素'},            '2871':{'name':'ニチレイ'},
+  '2914':{'name':'JT'},               '3401':{'name':'帝人'},
+  '3402':{'name':'東レ'},              '3436':{'name':'SUMCO'},
+  '3861':{'name':'王子HD'},            '3863':{'name':'日本製紙'},
+  '4004':{'name':'レゾナック・HD'},    '4005':{'name':'住友化学'},
+  '4021':{'name':'日産化学'},          '4042':{'name':'東ソー'},
+  '4043':{'name':'トクヤマ'},          '4061':{'name':'デンカ'},
+  '4063':{'name':'信越化学工業'},      '4151':{'name':'協和キリン'},
+  '4183':{'name':'三井化学'},          '4188':{'name':'三菱ケミカルG'},
+  '4208':{'name':'UBE'},              '4307':{'name':'野村総研'},
+  '4324':{'name':'電通グループ'},      '4452':{'name':'花王'},
+  '4502':{'name':'武田薬品'},          '4503':{'name':'アステラス製薬'},
+  '4506':{'name':'住友ファーマ'},      '4507':{'name':'塩野義製薬'},
+  '4519':{'name':'中外製薬'},          '4523':{'name':'エーザイ'},
+  '4528':{'name':'小野薬品'},          '4543':{'name':'テルモ'},
+  '4568':{'name':'第一三共'},          '4578':{'name':'大塚HD'},
+  '4689':{'name':'LINEヤフー'},        '5019':{'name':'出光興産'},
+  '5020':{'name':'ENEOS HD'},          '5108':{'name':'ブリヂストン'},
+  '5201':{'name':'AGC'},              '5214':{'name':'日本電気硝子'},
+  '5232':{'name':'住友大阪セメント'},  '5233':{'name':'太平洋セメント'},
+  '5301':{'name':'東海カーボン'},      '5332':{'name':'TOTO'},
+  '5333':{'name':'日本碍子'},          '5401':{'name':'日本製鉄'},
+  '5406':{'name':'神戸製鋼所'},        '5411':{'name':'JFE HD'},
+  '5541':{'name':'大平洋金属'},        '5631':{'name':'日本製鋼所'},
+  '5703':{'name':'日本軽金属HD'},      '5706':{'name':'三井金属'},
+  '5707':{'name':'東邦亜鉛'},          '5711':{'name':'三菱マテリアル'},
+  '5713':{'name':'住友金属鉱山'},      '5714':{'name':'DOWA HD'},
+  '5715':{'name':'古河機械金属'},      '5801':{'name':'古河電工'},
+  '5802':{'name':'住友電工'},          '5803':{'name':'フジクラ'},
+  '6098':{'name':'リクルートHD'},      '6103':{'name':'オークマ'},
+  '6113':{'name':'アマダ'},            '6146':{'name':'ディスコ'},
+  '6301':{'name':'コマツ'},            '6302':{'name':'住友重機'},
+  '6305':{'name':'日立建機'},          '6326':{'name':'クボタ'},
+  '6361':{'name':'荏原製作所'},        '6367':{'name':'ダイキン工業'},
+  '6501':{'name':'日立製作所'},        '6503':{'name':'三菱電機'},
+  '6504':{'name':'富士電機'},          '6506':{'name':'安川電機'},
+  '6508':{'name':'明電舎'},            '6594':{'name':'ニデック'},
+  '6645':{'name':'オムロン'},          '6674':{'name':'GSユアサ'},
+  '6701':{'name':'NEC'},              '6702':{'name':'富士通'},
+  '6703':{'name':'沖電気工業'},        '6706':{'name':'電気興業'},
+  '6724':{'name':'セイコーエプソン'}, '6752':{'name':'パナソニックHD'},
+  '6753':{'name':'シャープ'},          '6758':{'name':'ソニーグループ'},
+  '6762':{'name':'TDK'},              '6770':{'name':'アルプスアルパイン'},
+  '6857':{'name':'アドバンテスト'},    '6861':{'name':'キーエンス'},
+  '6902':{'name':'デンソー'},          '6952':{'name':'カシオ計算機'},
+  '6954':{'name':'ファナック'},        '6971':{'name':'京セラ'},
+  '6976':{'name':'太陽誘電'},          '6981':{'name':'村田製作所'},
+  '7011':{'name':'三菱重工'},          '7013':{'name':'IHI'},
+  '7201':{'name':'日産自動車'},        '7202':{'name':'いすゞ自動車'},
+  '7203':{'name':'トヨタ自動車'},      '7205':{'name':'日野自動車'},
+  '7211':{'name':'三菱自動車'},        '7261':{'name':'マツダ'},
+  '7267':{'name':'ホンダ'},            '7269':{'name':'スズキ'},
+  '7270':{'name':'SUBARU'},           '7272':{'name':'ヤマハ発動機'},
+  '7309':{'name':'シマノ'},            '7731':{'name':'ニコン'},
+  '7733':{'name':'オリンパス'},        '7735':{'name':'SCREEN HD'},
+  '7741':{'name':'HOYA'},             '7751':{'name':'キヤノン'},
+  '7752':{'name':'リコー'},            '7762':{'name':'シチズン時計'},
+  '7832':{'name':'バンダイナムコHD'}, '7912':{'name':'大日本印刷'},
+  '7951':{'name':'ヤマハ'},            '7974':{'name':'任天堂'},
+  '8001':{'name':'伊藤忠商事'},        '8002':{'name':'丸紅'},
+  '8015':{'name':'豊田通商'},          '8031':{'name':'三井物産'},
+  '8053':{'name':'住友商事'},          '8058':{'name':'三菱商事'},
+  '8233':{'name':'高島屋'},            '8252':{'name':'丸井グループ'},
+  '8267':{'name':'イオン'},            '8304':{'name':'あおぞら銀行'},
+  '8306':{'name':'三菱UFJ FG'},        '8308':{'name':'りそなHD'},
+  '8309':{'name':'三井住友トラストHD'},'8316':{'name':'三井住友FG'},
+  '8411':{'name':'みずほFG'},          '8601':{'name':'大和証券G本社'},
+  '8604':{'name':'野村HD'},            '8630':{'name':'SOMPO HD'},
+  '8725':{'name':'MS&AD'},            '8750':{'name':'第一生命HD'},
+  '8766':{'name':'東京海上HD'},        '8795':{'name':'T&D HD'},
+  '8801':{'name':'三井不動産'},        '8802':{'name':'三菱地所'},
+  '8804':{'name':'東京建物'},          '8830':{'name':'住友不動産'},
+  '9001':{'name':'東武鉄道'},          '9005':{'name':'東急'},
+  '9007':{'name':'小田急電鉄'},        '9008':{'name':'京王電鉄'},
+  '9009':{'name':'京成電鉄'},          '9020':{'name':'JR東日本'},
+  '9022':{'name':'JR東海'},            '9064':{'name':'ヤマトHD'},
+  '9101':{'name':'日本郵船'},          '9104':{'name':'商船三井'},
+  '9107':{'name':'川崎汽船'},          '9202':{'name':'ANA HD'},
+  '9301':{'name':'三菱倉庫'},          '9432':{'name':'NTT'},
+  '9433':{'name':'KDDI'},             '9434':{'name':'ソフトバンク'},
+  '9501':{'name':'東京電力HD'},        '9502':{'name':'中部電力'},
+  '9503':{'name':'関西電力'},          '9531':{'name':'東京ガス'},
+  '9532':{'name':'大阪ガス'},          '9602':{'name':'東宝'},
+  '9613':{'name':'NTTデータG'},        '9684':{'name':'スクウェア・エニックスHD'},
+  '9735':{'name':'セコム'},            '9983':{'name':'ファーストリテイリング'},
+  '9984':{'name':'ソフトバンクG'},
 };
 
 // MA設定（期間・色・シリーズキー）
@@ -807,11 +894,12 @@ async function loadData(code) {
    銘柄切替
 ====================================================== */
 async function switchStock(code) {
+  if (!code) return;
   currentCode = code;
 
-  // ボタン状態更新
-  document.querySelectorAll('.stock-btn')
-          .forEach(b => b.classList.toggle('active', b.dataset.code === code));
+  // セレクト状態更新
+  const sel = document.getElementById('stock-select');
+  if (sel) sel.value = code;
 
   try {
     const data = await loadData(code);
@@ -1233,8 +1321,41 @@ document.getElementById('init-modal').addEventListener('click', e => {
 })();
 
 /* ======================================================
+   銘柄ドロップダウン初期化 / フィルタ
+====================================================== */
+function buildStockSelect(filter = '') {
+  const sel = document.getElementById('stock-select');
+  const prev = sel.value || '1801';
+  sel.innerHTML = '';
+  const q = filter.trim().toLowerCase();
+  let firstCode = null;
+  for (const [code, info] of Object.entries(STOCK_INFO)) {
+    if (q && !code.includes(q) && !info.name.toLowerCase().includes(q)) continue;
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = `${code} ${info.name}`;
+    sel.appendChild(opt);
+    if (!firstCode) firstCode = code;
+  }
+  // 前の選択を復元、なければ先頭の銘柄
+  if (sel.querySelector(`option[value="${prev}"]`)) {
+    sel.value = prev;
+  } else if (firstCode) {
+    sel.value = firstCode;
+  }
+}
+
+function filterStocks(val) {
+  buildStockSelect(val);
+  // フィルタ後に1銘柄しか残らなければ自動でチャートを切替
+  const sel = document.getElementById('stock-select');
+  if (sel.options.length === 1) switchStock(sel.value);
+}
+
+/* ======================================================
    エントリポイント
 ====================================================== */
+buildStockSelect();
 initChart();
 switchStock('1801');
 </script>
