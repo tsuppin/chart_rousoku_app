@@ -1492,6 +1492,26 @@ let tAvgBuyPrice = 0;
 let tRealizedPnL = 0;
 let tHistory = [];
 
+function setCandleColor(idx, actionType) {
+  if (idx < 0 || idx >= allCandles.length) return;
+  
+  let color = null;
+  switch(actionType) {
+    case 'buy_entry':   color = '#42A5F5'; break; // 青
+    case 'sell_entry':  color = '#E040FB'; break; // 紫
+    case 'buy_close':   color = '#FFA726'; break; // オレンジ
+    case 'sell_close':  color = '#FFF176'; break; // 黄色
+    case 'settle_all':  color = '#FFFFFF'; break; // 白
+  }
+  
+  if (color) {
+    allCandles[idx].color = color;
+    allCandles[idx].wickColor = color;
+    allCandles[idx].borderColor = color;
+    candleSeries.update(allCandles[idx]);
+  }
+}
+
 function changePos(type, delta) {
   if (!allCandles.length) return;
   const c = allCandles[cursor];
@@ -1504,6 +1524,7 @@ function changePos(type, delta) {
       tAvgSellPrice = ((tAvgSellPrice * tPosSell) + (price * delta)) / newTotal;
       tPosSell = newTotal;
       addHistory(c.time, '売り追加', delta * unit, price, 0);
+      setCandleColor(cursor, 'sell_entry');
     } else if (delta < 0 && tPosSell > 0) {
       const closeQty = Math.min(Math.abs(delta), tPosSell);
       tPosSell -= closeQty;
@@ -1511,6 +1532,7 @@ function changePos(type, delta) {
       tRealizedPnL += pnl;
       addHistory(c.time, '売り決済', closeQty * unit, price, pnl);
       if (tPosSell === 0) tAvgSellPrice = 0;
+      setCandleColor(cursor, 'sell_close');
     }
   } else if (type === 'buy') {
     if (delta > 0) {
@@ -1518,6 +1540,7 @@ function changePos(type, delta) {
       tAvgBuyPrice = ((tAvgBuyPrice * tPosBuy) + (price * delta)) / newTotal;
       tPosBuy = newTotal;
       addHistory(c.time, '買い追加', delta * unit, price, 0);
+      setCandleColor(cursor, 'buy_entry');
     } else if (delta < 0 && tPosBuy > 0) {
       const closeQty = Math.min(Math.abs(delta), tPosBuy);
       tPosBuy -= closeQty;
@@ -1525,6 +1548,7 @@ function changePos(type, delta) {
       tRealizedPnL += pnl;
       addHistory(c.time, '買い決済', closeQty * unit, price, pnl);
       if (tPosBuy === 0) tAvgBuyPrice = 0;
+      setCandleColor(cursor, 'buy_close');
     }
   }
   updateTradePanel();
@@ -1548,6 +1572,8 @@ function settleAll() {
     totalPnl += pnl;
     addHistory(c.time, '買い決済(区切)', tPosBuy * unit, price, pnl);
   }
+  
+  setCandleColor(cursor, 'settle_all');
   
   tRealizedPnL += totalPnl;
   tPosSell = 0;
@@ -1588,6 +1614,18 @@ function resetTradeState() {
   tAvgSellPrice = 0; tAvgBuyPrice = 0;
   tRealizedPnL = 0;
   tHistory = [];
+  
+  if (allCandles && allCandles.length) {
+    for (let i = 0; i < allCandles.length; i++) {
+      if (allCandles[i].color) {
+        delete allCandles[i].color;
+        delete allCandles[i].wickColor;
+        delete allCandles[i].borderColor;
+      }
+    }
+    refreshChart();
+  }
+  
   updateTradePanel();
 }
 
