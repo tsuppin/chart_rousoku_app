@@ -1112,8 +1112,8 @@ async function switchStock(code) {
     allCandles  = data.candles;
     allMAs      = data.mas;
 
-    // 最新バーを初期カーソルに
-    cursor = allCandles.length - 1;
+    // 最古のバー（表示窓を満たす位置）を初期カーソルに
+    cursor = Math.min(winSize - 1, allCandles.length - 1);
 
     // トレード状態のリセット
     if (typeof resetTradeState === 'function') resetTradeState();
