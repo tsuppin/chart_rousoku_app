@@ -34,7 +34,9 @@
       --green2:      #00897b;
 
       /* 移動平均線カラー（相場流指定） */
+      --ma3:   #ff4081;   /* ピンク */
       --ma5:   #f23645;   /* 赤   */
+      --ma7:   #ffffff;   /* 白   */
       --ma10:  #00c853;   /* 緑   */
       --ma20:  #2196f3;   /* 青   */
       --ma50:  #ab47bc;   /* 紫   */
@@ -464,9 +466,17 @@
 ==================================================== -->
 <div id="ma-legend">
   <span class="lbl">MA</span>
+  <div class="ma-entry" id="mae-3"   onclick="toggleMA(3)">
+    <div class="ma-dash" style="background:var(--ma3)"></div>
+    <span id="ma3t"   style="color:var(--ma3)"  >MA3:---</span>
+  </div>
   <div class="ma-entry" id="mae-5"   onclick="toggleMA(5)">
     <div class="ma-dash" style="background:var(--ma5)"></div>
     <span id="ma5t"   style="color:var(--ma5)"  >MA5:---</span>
+  </div>
+  <div class="ma-entry" id="mae-7"   onclick="toggleMA(7)">
+    <div class="ma-dash" style="background:var(--ma7)"></div>
+    <span id="ma7t"   style="color:var(--ma7)"  >MA7:---</span>
   </div>
   <div class="ma-entry" id="mae-10"  onclick="toggleMA(10)">
     <div class="ma-dash" style="background:var(--ma10)"></div>
@@ -500,8 +510,8 @@
 
   <!-- 終値ライン 表示/非表示 -->
   <div class="ma-entry off" id="tog-close" onclick="toggleClose()">
-    <div class="ma-dash" style="background:#e8e8e8"></div>
-    <span id="close-lbl" style="color:#e8e8e8; font-size:11px; font-family:'Roboto Mono',monospace">終値</span>
+    <div class="ma-dash" style="background:#9e9e9e"></div>
+    <span id="close-lbl" style="color:#9e9e9e; font-size:11px; font-family:'Roboto Mono',monospace">終値</span>
   </div>
 </div>
 
@@ -697,7 +707,9 @@ const STOCK_INFO = {
 
 // MA設定（期間・色・シリーズキー）
 const MA_DEFS = [
+  { p: 3,   color: '#ff4081', label: 'MA3'   },
   { p: 5,   color: '#f23645', label: 'MA5'   },
+  { p: 7,   color: '#ffffff', label: 'MA7'   },
   { p: 10,  color: '#00c853', label: 'MA10'  },
   { p: 20,  color: '#2196f3', label: 'MA20'  },
   { p: 50,  color: '#ab47bc', label: 'MA50'  },
@@ -788,9 +800,9 @@ function initChart() {
     });
   }
 
-  /* 終値ライン（白）- デフォルト非表示 */
+  /* 終値ライン（グレー）- デフォルト非表示 */
   closeSeries = chart.addLineSeries({
-    color:                  '#e8e8e8',
+    color:                  '#9e9e9e',
     lineWidth:              1,
     priceLineVisible:       false,
     lastValueVisible:       false,
