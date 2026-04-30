@@ -1054,23 +1054,37 @@ async function loadData(code) {
 
   setLoading(true, `${code} データ読込中...`);
 
-  const res = await fetch(`data/${code}.json`);
-  if (!res.ok) {
-    throw new Error(
-      `data/${code}.json が見つかりません。\n` +
-      `先に fetch_data.py を実行してください:\n  python fetch_data.py`
-    );
-  }
-  const json = await res.json();
-  const candles = json.candles;
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = `data/${code}.js`;
+    
+    script.onload = () => {
+      const json = window[`STOCK_DATA_${code}`];
+      if (!json) {
+        reject(new Error('データ形式が不正です'));
+        return;
+      }
+      
+      const candles = json.candles;
+      const mas = {};
+      for (const d of MA_DEFS) {
+        mas[d.p] = calcMA(candles, d.p);
+      }
 
-  const mas = {};
-  for (const d of MA_DEFS) {
-    mas[d.p] = calcMA(candles, d.p);
-  }
-
-  dataCache[code] = { candles, mas, info: json };
-  return dataCache[code];
+      dataCache[code] = { candles, mas, info: json };
+      document.head.removeChild(script); // 読み込み後はスクリプトタグを削除
+      resolve(dataCache[code]);
+    };
+    
+    script.onerror = () => {
+      reject(new Error(
+        `data/${code}.js が見つかりません。\n` +
+        `先に fetch_data.py を実行してください:\n  python fetch_data.py`
+      ));
+    };
+    
+    document.head.appendChild(script);
+  });
 }
 
 /* ======================================================

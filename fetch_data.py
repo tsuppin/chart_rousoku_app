@@ -321,9 +321,11 @@ def fetch_all():
             "candles":    candles,
         }
 
-        out_path = os.path.join(OUTPUT_DIR, f"{code}.json")
+        out_path = os.path.join(OUTPUT_DIR, f"{code}.js")
         with open(out_path, "w", encoding="utf-8") as f:
+            f.write(f"window.STOCK_DATA_{code} = ")
             json.dump(output, f, ensure_ascii=False, indent=2)
+            f.write(";")
 
         print(f"OK ({len(candles):,} 件)")
         success_count += 1
