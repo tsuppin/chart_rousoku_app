@@ -53,6 +53,7 @@
       font-family: 'Noto Sans JP', -apple-system, sans-serif;
       display: flex;
       flex-direction: column;
+      height: 100vh;
       height: 100dvh;
       user-select: none;
     }
@@ -167,15 +168,103 @@
     }
 
     /* =========================================================
-       チャートラッパー
+       メインエリア＆チャートラッパー
     ========================================================= */
+    #main-area {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      width: 100%;
+      overflow: hidden;
+    }
     #chart-wrap {
       flex: 1;
       position: relative;
       min-height: 0;
       overflow: hidden;
     }
-    #chart { width: 100%; height: 100%; }
+    #chart { 
+      position: absolute; 
+      top: 0; left: 0; right: 0; bottom: 0; 
+    }
+
+    /* =========================================================
+       トレードパネル
+    ========================================================= */
+    #trade-panel {
+      width: 280px;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      overflow-y: auto;
+    }
+
+    .tp-section { padding: 16px; border-bottom: 1px solid var(--border); }
+    .tp-row { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: baseline; }
+    .tp-lbl { font-size: 12px; color: var(--dim); }
+    .tp-val { font-size: 16px; font-weight: 700; font-family: 'Roboto Mono', monospace; }
+    .tp-val.profit { color: var(--up); }
+    .tp-val.loss { color: var(--down); }
+
+    .tp-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .tp-btn {
+      flex: 1; background: var(--hover); border: 1px solid var(--border);
+      color: var(--text); padding: 8px; font-size: 12px; border-radius: 5px;
+      cursor: pointer; transition: 0.15s; font-family: inherit;
+    }
+    .tp-btn:hover { background: var(--active); border-color: var(--accent); }
+
+    .tp-pos-section { flex: 1; }
+    .tp-pos-header { font-size: 14px; font-weight: 700; margin-bottom: 20px; text-align: center; color: var(--text); }
+    .tp-pos-grid { display: flex; justify-content: space-between; align-items: center; }
+    
+    .tp-pos-col { display: flex; flex-direction: column; align-items: center; width: 60px; }
+    .tp-pos-title { font-size: 13px; margin-bottom: 10px; font-weight: 700; }
+    .down-color { color: var(--down); }
+    .up-color { color: var(--up); }
+    
+    .tp-arrow {
+      background: var(--hover); border: 1px solid var(--border); color: var(--text);
+      width: 100%; height: 36px; display: flex; align-items: center; justify-content: center;
+      border-radius: 6px; cursor: pointer; font-size: 16px; transition: 0.1s;
+    }
+    .tp-arrow:hover { background: var(--active); transform: scale(1.05); }
+    .tp-arrow:active { transform: scale(0.95); }
+    
+    .tp-pos-count { font-size: 28px; font-weight: 700; font-family: 'Roboto Mono', monospace; margin: 12px 0; }
+    
+    .tp-pos-center { display: flex; flex-direction: column; align-items: center; flex: 1; }
+    .tp-ratio { font-size: 20px; font-weight: 700; letter-spacing: 2px; margin-bottom: 12px; font-family: 'Roboto Mono', monospace; }
+    .tp-btn-settle {
+      background: transparent; border: 1px solid var(--accent); color: var(--accent);
+      padding: 8px 14px; font-size: 12px; font-weight: 700; border-radius: 5px;
+      cursor: pointer; transition: 0.15s;
+    }
+    .tp-btn-settle:hover { background: var(--accent); color: #fff; }
+
+    .tp-unit { margin-top: 25px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: var(--dim); }
+    .tp-unit input {
+      background: var(--hover); border: 1px solid var(--border); color: var(--text);
+      width: 70px; padding: 6px; text-align: right; border-radius: 5px;
+      font-family: 'Roboto Mono', monospace; font-size: 13px; outline: none;
+    }
+    .tp-unit input:focus { border-color: var(--accent); }
+
+    /* 履歴モーダル */
+    .hist-table-wrap { max-height: 300px; overflow-y: auto; margin-top: 15px; border: 1px solid var(--border); border-radius: 6px; }
+    .hist-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'Roboto Mono', monospace; }
+    .hist-table th { background: var(--hover); color: var(--dim); font-weight: normal; padding: 8px; text-align: right; position: sticky; top: 0; z-index: 1; }
+    .hist-table th:first-child { text-align: left; }
+    .hist-table td { padding: 8px; text-align: right; border-top: 1px solid var(--border); }
+    .hist-table td:first-child { text-align: left; }
+
+    @media (max-width: 800px) {
+      #main-area { flex-direction: column; }
+      #trade-panel { width: 100%; border-left: none; border-top: 1px solid var(--border); flex: 0 0 auto; }
+      #chart-wrap { flex: 1; min-height: 300px; }
+    }
 
     /* ローディングオーバーレイ */
     #loading {
@@ -424,6 +513,18 @@
       #win-sel { gap: 4px; }
       #auto-area { gap: 4px; }
     }
+
+    @media (max-width: 800px) {
+      #main-area { flex-direction: column; }
+      #trade-panel {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+        /* Optionally cap the height so it doesn't take up the whole screen */
+        max-height: 250px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -516,15 +617,65 @@
 </div>
 
 <!-- ====================================================
-     チャート本体
+     メインエリア (チャート本体 + トレードパネル)
 ==================================================== -->
-<div id="chart-wrap">
-  <div id="loading">
-    <div class="loader-ring"></div>
-    <div id="load-msg">データ読込中...</div>
+<div id="main-area">
+  <div id="chart-wrap">
+    <div id="loading">
+      <div class="loader-ring"></div>
+      <div id="load-msg">データ読込中...</div>
+    </div>
+    <div id="chart"></div>
+    <div id="swipe-hint">← 左スワイプ：前日　右スワイプ：次日 →</div>
   </div>
-  <div id="chart"></div>
-  <div id="swipe-hint">← 左スワイプ：前日　右スワイプ：次日 →</div>
+
+  <div id="trade-panel">
+    <div class="tp-section">
+      <div class="tp-row">
+        <span class="tp-lbl">評価損益</span>
+        <span class="tp-val" id="unrealized-pnl">0円</span>
+      </div>
+      <div class="tp-row">
+        <span class="tp-lbl">確定損益</span>
+        <span class="tp-val" id="realized-pnl">0円</span>
+      </div>
+      <div class="tp-actions">
+        <button class="tp-btn" onclick="showHistory()">🕒 取引履歴</button>
+        <button class="tp-btn" onclick="resetTrade()">🗑 リセット</button>
+      </div>
+    </div>
+
+    <div class="tp-section tp-pos-section">
+      <div class="tp-pos-header">📈 ポジション（建玉）</div>
+      
+      <div class="tp-pos-grid">
+        <div class="tp-pos-col">
+          <div class="tp-pos-title down-color">売り</div>
+          <button class="tp-arrow" onclick="changePos('sell', 1)">▲</button>
+          <div class="tp-pos-count down-color" id="pos-sell">0</div>
+          <button class="tp-arrow" onclick="changePos('sell', -1)">▼</button>
+        </div>
+        
+        <div class="tp-pos-center">
+          <div class="tp-ratio" id="pos-ratio">0 - 0</div>
+          <button class="tp-btn-settle" onclick="settleAll()">🔄 区切る</button>
+        </div>
+
+        <div class="tp-pos-col">
+          <div class="tp-pos-title up-color">買い</div>
+          <button class="tp-arrow" onclick="changePos('buy', 1)">▲</button>
+          <div class="tp-pos-count up-color" id="pos-buy">0</div>
+          <button class="tp-arrow" onclick="changePos('buy', -1)">▼</button>
+        </div>
+      </div>
+
+      <div class="tp-unit">
+        <span>×</span>
+        <input type="number" id="trade-unit" value="100" step="100" min="1">
+        <span>株</span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ====================================================
@@ -594,6 +745,26 @@
     <div class="m-acts">
       <button class="m-btn cancel" onclick="closeModal()">キャンセル</button>
       <button class="m-btn ok"     onclick="applyInit()">この位置から開始</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====================================================
+     取引履歴ダイアログ
+==================================================== -->
+<div class="modal-bg" id="hist-modal">
+  <div class="modal-card" style="width: 500px;">
+    <div class="m-h">🕒 取引履歴</div>
+    <div class="hist-table-wrap">
+      <table class="hist-table">
+        <thead>
+          <tr><th>日時</th><th>操作</th><th>数量</th><th>価格</th><th>損益</th></tr>
+        </thead>
+        <tbody id="hist-tbody"></tbody>
+      </table>
+    </div>
+    <div class="m-acts">
+      <button class="m-btn cancel" onclick="closeHistory()">閉じる</button>
     </div>
   </div>
 </div>
@@ -751,8 +922,8 @@ function initChart() {
   const el   = document.getElementById('chart');
 
   chart = LightweightCharts.createChart(el, {
-    width:  wrap.clientWidth,
-    height: wrap.clientHeight,
+    width:  wrap.clientWidth || 800,
+    height: wrap.clientHeight || 400,
     layout: {
       background: { type: 'solid', color: '#0f1117' },
       textColor:  '#787b86',
@@ -920,6 +1091,9 @@ async function switchStock(code) {
 
     // 最新バーを初期カーソルに
     cursor = allCandles.length - 1;
+
+    // トレード状態のリセット
+    if (typeof resetTradeState === 'function') resetTradeState();
 
     // 全データをセット
     refreshChart();
@@ -1105,6 +1279,8 @@ function showBarInfo(idx) {
       setMAText(d.p, null);
     }
   }
+
+  if (typeof updateTradePanel === 'function') updateTradePanel();
 }
 
 /* ======================================================
@@ -1288,6 +1464,144 @@ document.addEventListener('keydown', e => {
 document.getElementById('init-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeModal();
 });
+document.getElementById('hist-modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeHistory();
+});
+
+/* ======================================================
+   トレードシミュレーションロジック
+====================================================== */
+let tPosSell = 0;
+let tPosBuy = 0;
+let tAvgSellPrice = 0;
+let tAvgBuyPrice = 0;
+let tRealizedPnL = 0;
+let tHistory = [];
+
+function changePos(type, delta) {
+  if (!allCandles.length) return;
+  const c = allCandles[cursor];
+  const price = c.close;
+  const unit = parseInt(document.getElementById('trade-unit').value) || 100;
+
+  if (type === 'sell') {
+    if (delta > 0) {
+      const newTotal = tPosSell + delta;
+      tAvgSellPrice = ((tAvgSellPrice * tPosSell) + (price * delta)) / newTotal;
+      tPosSell = newTotal;
+      addHistory(c.time, '売り追加', delta * unit, price, 0);
+    } else if (delta < 0 && tPosSell > 0) {
+      const closeQty = Math.min(Math.abs(delta), tPosSell);
+      tPosSell -= closeQty;
+      const pnl = (tAvgSellPrice - price) * closeQty * unit;
+      tRealizedPnL += pnl;
+      addHistory(c.time, '売り決済', closeQty * unit, price, pnl);
+      if (tPosSell === 0) tAvgSellPrice = 0;
+    }
+  } else if (type === 'buy') {
+    if (delta > 0) {
+      const newTotal = tPosBuy + delta;
+      tAvgBuyPrice = ((tAvgBuyPrice * tPosBuy) + (price * delta)) / newTotal;
+      tPosBuy = newTotal;
+      addHistory(c.time, '買い追加', delta * unit, price, 0);
+    } else if (delta < 0 && tPosBuy > 0) {
+      const closeQty = Math.min(Math.abs(delta), tPosBuy);
+      tPosBuy -= closeQty;
+      const pnl = (price - tAvgBuyPrice) * closeQty * unit;
+      tRealizedPnL += pnl;
+      addHistory(c.time, '買い決済', closeQty * unit, price, pnl);
+      if (tPosBuy === 0) tAvgBuyPrice = 0;
+    }
+  }
+  updateTradePanel();
+}
+
+function settleAll() {
+  if (!allCandles.length) return;
+  if (tPosSell === 0 && tPosBuy === 0) return;
+  const c = allCandles[cursor];
+  const price = c.close;
+  const unit = parseInt(document.getElementById('trade-unit').value) || 100;
+  
+  let totalPnl = 0;
+  if (tPosSell > 0) {
+    const pnl = (tAvgSellPrice - price) * tPosSell * unit;
+    totalPnl += pnl;
+    addHistory(c.time, '売り決済(区切)', tPosSell * unit, price, pnl);
+  }
+  if (tPosBuy > 0) {
+    const pnl = (price - tAvgBuyPrice) * tPosBuy * unit;
+    totalPnl += pnl;
+    addHistory(c.time, '買い決済(区切)', tPosBuy * unit, price, pnl);
+  }
+  
+  tRealizedPnL += totalPnl;
+  tPosSell = 0;
+  tPosBuy = 0;
+  tAvgSellPrice = 0;
+  tAvgBuyPrice = 0;
+  updateTradePanel();
+}
+
+function updateTradePanel() {
+  document.getElementById('pos-sell').textContent = tPosSell;
+  document.getElementById('pos-buy').textContent = tPosBuy;
+  document.getElementById('pos-ratio').textContent = `${tPosSell} - ${tPosBuy}`;
+  
+  let unPnl = 0;
+  if (allCandles.length > 0) {
+    const price = allCandles[cursor].close;
+    const unit = parseInt(document.getElementById('trade-unit').value) || 100;
+    if (tPosSell > 0) unPnl += (tAvgSellPrice - price) * tPosSell * unit;
+    if (tPosBuy > 0)  unPnl += (price - tAvgBuyPrice) * tPosBuy * unit;
+  }
+  
+  const elUnPnl = document.getElementById('unrealized-pnl');
+  elUnPnl.textContent = Math.round(unPnl).toLocaleString() + '円';
+  elUnPnl.className = 'tp-val ' + (unPnl > 0 ? 'profit' : (unPnl < 0 ? 'loss' : ''));
+
+  const elRePnl = document.getElementById('realized-pnl');
+  elRePnl.textContent = Math.round(tRealizedPnL).toLocaleString() + '円';
+  elRePnl.className = 'tp-val ' + (tRealizedPnL > 0 ? 'profit' : (tRealizedPnL < 0 ? 'loss' : ''));
+}
+
+function addHistory(time, type, qty, price, pnl) {
+  tHistory.unshift({ time, type, qty, price, pnl: Math.round(pnl) });
+}
+
+function resetTradeState() {
+  tPosSell = 0; tPosBuy = 0;
+  tAvgSellPrice = 0; tAvgBuyPrice = 0;
+  tRealizedPnL = 0;
+  tHistory = [];
+  updateTradePanel();
+}
+
+function resetTrade() {
+  if (!confirm('取引履歴と現在のポジションをすべてリセットしますか？')) return;
+  resetTradeState();
+}
+
+function showHistory() {
+  const tbody = document.getElementById('hist-tbody');
+  tbody.innerHTML = '';
+  for (const h of tHistory) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${h.time}</td>
+      <td>${h.type}</td>
+      <td>${h.qty}</td>
+      <td>${h.price.toLocaleString()}</td>
+      <td class="${h.pnl > 0 ? 'up-color' : (h.pnl < 0 ? 'down-color' : '')}">${h.pnl ? h.pnl.toLocaleString() : '-'}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+  document.getElementById('hist-modal').classList.add('open');
+}
+
+function closeHistory() {
+  document.getElementById('hist-modal').classList.remove('open');
+}
 
 /* ======================================================
    タッチスワイプ（モバイル対応）
