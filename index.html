@@ -704,8 +704,8 @@
   <div class="vdiv" style="height:24px"></div>
 
   <div id="win-sel">
-    <button class="wbtn"    onclick="setWindow(60)">3ヶ月</button>
-    <button class="wbtn on" onclick="setWindow(120)">6ヶ月</button>
+    <button class="wbtn on"    onclick="setWindow(60)">3ヶ月</button>
+    <button class="wbtn" onclick="setWindow(120)">6ヶ月</button>
     <button class="wbtn"    onclick="setWindow(240)">1年</button>
   </div>
 
@@ -900,7 +900,7 @@ const maVisible  = {};     // { period: bool }
 let allCandles = [];       // 全ローソクデータ配列
 let allMAs     = {};       // { period: [{time,value}] }
 let cursor     = 0;        // 現在の最終表示バーのインデックス
-let winSize    = 120;      // 表示バー数
+let winSize    = 60;       // 表示バー数
 
 let candleVisible = true;  // ローソク足 表示状態
 let closeVisible  = false; // 終値ライン 表示状態
@@ -911,8 +911,10 @@ const MAX_BAR_SPACING = 80;
 let currentCode = '1801';
 const dataCache = {};      // { code: { candles, mas, info } }
 
-// MA ON/OFF 初期値
-MA_DEFS.forEach(d => { maVisible[d.p] = true; });
+// MA ON/OFF 初期値 (3日線と7日線はデフォルト非表示)
+MA_DEFS.forEach(d => { 
+  maVisible[d.p] = (d.p !== 3 && d.p !== 7); 
+});
 
 /* ======================================================
    チャート初期化
@@ -968,7 +970,14 @@ function initChart() {
       priceLineVisible:        false,
       lastValueVisible:        false,
       crosshairMarkerVisible:  false,
+      visible:                 maVisible[d.p],
     });
+    
+    // UIの初期状態反映
+    if (!maVisible[d.p]) {
+      const el = document.getElementById(`mae-${d.p}`);
+      if (el) el.classList.add('off');
+    }
   }
 
   /* 終値ライン（グレー）- デフォルト非表示 */
