@@ -635,6 +635,16 @@
         <span class="tp-lbl">評価損益</span>
         <span class="tp-val" id="unrealized-pnl">0円</span>
       </div>
+      <div id="pnl-detail" style="font-size: 11px; margin: -4px 0 10px 0; padding-left: 4px; border-left: 2px solid var(--border); display: none;">
+        <div style="display: flex; justify-content: space-between; color: var(--down);">
+          <span>売 損益:</span>
+          <span id="unpnl-sell">0円</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; color: var(--up);">
+          <span>買 損益:</span>
+          <span id="unpnl-buy">0円</span>
+        </div>
+      </div>
       <div class="tp-row">
         <span class="tp-lbl">確定損益</span>
         <span class="tp-val" id="realized-pnl">0円</span>
@@ -654,6 +664,7 @@
           <button class="tp-arrow" onclick="changePos('sell', 1)">▲</button>
           <div class="tp-pos-count down-color" id="pos-sell">0</div>
           <button class="tp-arrow" onclick="changePos('sell', -1)">▼</button>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 4px;" id="avg-sell-price">avg: -</div>
         </div>
         
         <div class="tp-pos-center">
@@ -666,6 +677,7 @@
           <button class="tp-arrow" onclick="changePos('buy', 1)">▲</button>
           <div class="tp-pos-count up-color" id="pos-buy">0</div>
           <button class="tp-arrow" onclick="changePos('buy', -1)">▼</button>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 4px;" id="avg-buy-price">avg: -</div>
         </div>
       </div>
 
@@ -1597,17 +1609,39 @@ function updateTradePanel() {
   document.getElementById('pos-buy').textContent = tPosBuy;
   document.getElementById('pos-ratio').textContent = `${tPosSell} - ${tPosBuy}`;
   
+  document.getElementById('avg-sell-price').textContent = tPosSell > 0 ? `avg: ${Math.round(tAvgSellPrice).toLocaleString()}` : 'avg: -';
+  document.getElementById('avg-buy-price').textContent = tPosBuy > 0 ? `avg: ${Math.round(tAvgBuyPrice).toLocaleString()}` : 'avg: -';
+  
   let unPnl = 0;
+  let unPnlSell = 0;
+  let unPnlBuy = 0;
+
   if (allCandles.length > 0) {
     const price = allCandles[cursor].close;
     const unit = parseInt(document.getElementById('trade-unit').value) || 100;
-    if (tPosSell > 0) unPnl += (tAvgSellPrice - price) * tPosSell * unit;
-    if (tPosBuy > 0)  unPnl += (price - tAvgBuyPrice) * tPosBuy * unit;
+    if (tPosSell > 0) {
+      unPnlSell = (tAvgSellPrice - price) * tPosSell * unit;
+      unPnl += unPnlSell;
+    }
+    if (tPosBuy > 0) {
+      unPnlBuy = (price - tAvgBuyPrice) * tPosBuy * unit;
+      unPnl += unPnlBuy;
+    }
   }
   
   const elUnPnl = document.getElementById('unrealized-pnl');
   elUnPnl.textContent = Math.round(unPnl).toLocaleString() + '円';
   elUnPnl.className = 'tp-val ' + (unPnl > 0 ? 'profit' : (unPnl < 0 ? 'loss' : ''));
+
+  // 内訳の更新
+  const elDetail = document.getElementById('pnl-detail');
+  if (tPosSell > 0 && tPosBuy > 0) {
+    elDetail.style.display = 'block';
+    document.getElementById('unpnl-sell').textContent = Math.round(unPnlSell).toLocaleString() + '円';
+    document.getElementById('unpnl-buy').textContent = Math.round(unPnlBuy).toLocaleString() + '円';
+  } else {
+    elDetail.style.display = 'none';
+  }
 
   const elRePnl = document.getElementById('realized-pnl');
   elRePnl.textContent = Math.round(tRealizedPnL).toLocaleString() + '円';
