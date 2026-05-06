@@ -352,7 +352,8 @@
     /* 表示窓サイズ選択 */
     #win-sel { display: flex; gap: 3px; margin-left: 4px; }
     .wbtn {
-      padding: 4px 8px;
+      padding: 4px 0;
+      width: 48px;
       border-radius: 4px;
       border: 1px solid var(--border);
       background: var(--hover);
@@ -360,6 +361,7 @@
       font-size: 11px;
       font-family: inherit;
       cursor: pointer;
+      text-align: center;
       transition: all 0.12s;
     }
     .wbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -715,8 +717,8 @@
   <div class="vdiv" style="height:24px"></div>
 
   <div id="win-sel">
-    <button class="wbtn on"    onclick="setWindow(60)">3ヶ月</button>
-    <button class="wbtn" onclick="setWindow(120)">6ヶ月</button>
+    <button class="wbtn on"    onclick="setWindow(60)">3月</button>
+    <button class="wbtn" onclick="setWindow(120)">6月</button>
     <button class="wbtn"    onclick="setWindow(240)">1年</button>
   </div>
 
@@ -1252,7 +1254,7 @@ function goLatest() {
 ====================================================== */
 function setWindow(size) {
   winSize = size;
-  const labels = { 60: '3ヶ月', 120: '6ヶ月', 240: '1年' };
+  const labels = { 60: '3月', 120: '6月', 240: '1年' };
   document.querySelectorAll('.wbtn')
           .forEach(b => b.classList.toggle('on', b.textContent.trim() === labels[size]));
   // winSize変更時はsetVisibleRangeで初期化（currentBarSpacingも更新される）
