@@ -789,6 +789,28 @@
 'use strict';
 
 /* ======================================================
+   ヘルパー: 日付フォーマット
+====================================================== */
+/** Lightweight Charts の time (string | object) を YYYY-MM-DD 文字列に変換 */
+function toDateStr(t) {
+  if (!t) return '----/--/--';
+  if (typeof t === 'string') return t;
+  if (typeof t === 'object' && t.year) {
+    return `${t.year}-${String(t.month).padStart(2, '0')}-${String(t.day).padStart(2, '0')}`;
+  }
+  return String(t);
+}
+
+/** YYYY-MM-DD -> YYMMDD */
+function toYYMMDD(t) {
+  const s = toDateStr(t);
+  if (s.includes('-')) {
+    return s.replace(/-/g, '').slice(2);
+  }
+  return s;
+}
+
+/* ======================================================
    定数・設定
 ====================================================== */
 const STOCK_INFO = {
@@ -1031,7 +1053,8 @@ function onCrosshair(param) {
       time: cd.time, open: cd.value, high: cd.value, low: cd.value, close: cd.value
     };
     // allCandles から正しいOHLCVを引く
-    const idx = allCandles.findIndex(x => x.time === (cd.time || param.time));
+    const tStr = toDateStr(cd.time || param.time);
+    const idx = allCandles.findIndex(x => toDateStr(x.time) === tStr);
     if (idx >= 0) displayOHLC(allCandles[idx]);
   }
 
@@ -1299,7 +1322,7 @@ function showBarInfo(idx) {
   if (!c) return;
 
   displayOHLC(c);
-  document.getElementById('date-badge').textContent = c.time.replace(/-/g, '').slice(2);
+  document.getElementById('date-badge').textContent = toYYMMDD(c.time);
   document.getElementById('bar-info').textContent   =
     `${(idx + 1).toLocaleString()} / ${allCandles.length.toLocaleString()} バー`;
 
@@ -1387,7 +1410,7 @@ function openInitModal() {
   document.getElementById('m-date').min   = allCandles[0].time;
   document.getElementById('m-date').max   = allCandles[allCandles.length - 1].time;
   document.getElementById('m-slbl').textContent = `${daysB}日前`;
-  document.getElementById('m-sprv').textContent = `→ 表示最終日: ${allCandles[cursor].time.replace(/-/g, '').slice(2)}`;
+  document.getElementById('m-sprv').textContent = `→ 表示最終日: ${toYYMMDD(allCandles[cursor].time)}`;
 
   document.getElementById('init-modal').classList.add('open');
 }
@@ -1400,7 +1423,7 @@ function onSlider(val) {
   const daysB = parseInt(val);
   const tgtIdx = Math.max(winSize, allCandles.length - 1 - daysB);
   document.getElementById('m-slbl').textContent = `${daysB}日前`;
-  document.getElementById('m-sprv').textContent = `→ 表示最終日: ${allCandles[tgtIdx].time.replace(/-/g, '').slice(2)}`;
+  document.getElementById('m-sprv').textContent = `→ 表示最終日: ${toYYMMDD(allCandles[tgtIdx].time)}`;
   document.getElementById('m-date').value       = allCandles[tgtIdx].time;
 }
 
@@ -1684,7 +1707,7 @@ function showHistory() {
   for (const h of tHistory) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${h.time.replace(/-/g, '').slice(2)}</td>
+      <td>${toYYMMDD(h.time)}</td>
       <td>${h.type}</td>
       <td>${h.qty}</td>
       <td>${h.price.toLocaleString()}</td>
