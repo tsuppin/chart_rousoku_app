@@ -1299,7 +1299,7 @@ function showBarInfo(idx) {
   if (!c) return;
 
   displayOHLC(c);
-  document.getElementById('date-badge').textContent = c.time;
+  document.getElementById('date-badge').textContent = c.time.replace(/-/g, '').slice(2);
   document.getElementById('bar-info').textContent   =
     `${(idx + 1).toLocaleString()} / ${allCandles.length.toLocaleString()} バー`;
 
@@ -1387,7 +1387,7 @@ function openInitModal() {
   document.getElementById('m-date').min   = allCandles[0].time;
   document.getElementById('m-date').max   = allCandles[allCandles.length - 1].time;
   document.getElementById('m-slbl').textContent = `${daysB}日前`;
-  document.getElementById('m-sprv').textContent = `→ 表示最終日: ${allCandles[cursor].time}`;
+  document.getElementById('m-sprv').textContent = `→ 表示最終日: ${allCandles[cursor].time.replace(/-/g, '').slice(2)}`;
 
   document.getElementById('init-modal').classList.add('open');
 }
@@ -1400,7 +1400,7 @@ function onSlider(val) {
   const daysB = parseInt(val);
   const tgtIdx = Math.max(winSize, allCandles.length - 1 - daysB);
   document.getElementById('m-slbl').textContent = `${daysB}日前`;
-  document.getElementById('m-sprv').textContent = `→ 表示最終日: ${allCandles[tgtIdx].time}`;
+  document.getElementById('m-sprv').textContent = `→ 表示最終日: ${allCandles[tgtIdx].time.replace(/-/g, '').slice(2)}`;
   document.getElementById('m-date').value       = allCandles[tgtIdx].time;
 }
 
@@ -1684,7 +1684,7 @@ function showHistory() {
   for (const h of tHistory) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${h.time}</td>
+      <td>${h.time.replace(/-/g, '').slice(2)}</td>
       <td>${h.type}</td>
       <td>${h.qty}</td>
       <td>${h.price.toLocaleString()}</td>
