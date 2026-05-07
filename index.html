@@ -727,7 +727,7 @@
 
       <div class="tp-unit">
         <span>×</span>
-        <input type="number" id="trade-unit" value="100" step="100" min="1">
+        <input type="number" id="trade-unit" value="100" step="100" min="1" oninput="updateTradePanel()">
         <span>株</span>
       </div>
     </div>
@@ -1446,7 +1446,7 @@ function showBarInfo(idx) {
     }
   }
 
-  if (typeof updateTradePanel === 'function') updateTradePanel();
+  updateTradePanel(c.close);
 }
 
 /* ======================================================
@@ -1690,7 +1690,7 @@ function changePos(type, delta) {
       setCandleColor(cursor, 'buy_close');
     }
   }
-  updateTradePanel();
+  updateTradePanel(price);
 }
 
 function settleAll() {
@@ -1719,10 +1719,10 @@ function settleAll() {
   tPosBuy = 0;
   tAvgSellPrice = 0;
   tAvgBuyPrice = 0;
-  updateTradePanel();
+  updateTradePanel(price);
 }
 
-function updateTradePanel() {
+function updateTradePanel(currentPrice) {
   document.getElementById('pos-sell').textContent = tPosSell;
   document.getElementById('pos-buy').textContent = tPosBuy;
   document.getElementById('pos-ratio').textContent = `${tPosSell} - ${tPosBuy}`;
@@ -1734,8 +1734,12 @@ function updateTradePanel() {
   let unPnlSell = 0;
   let unPnlBuy = 0;
 
-  if (allCandles.length > 0) {
-    const price = allCandles[cursor].close;
+  // currentPrice が渡されなかった場合は cursor の終値にフォールバック
+  const price = (currentPrice !== undefined && currentPrice !== null)
+    ? currentPrice
+    : (allCandles.length > 0 && allCandles[cursor] ? allCandles[cursor].close : null);
+
+  if (price !== null) {
     const unit = parseInt(document.getElementById('trade-unit').value) || 100;
     if (tPosSell > 0) {
       unPnlSell = (tAvgSellPrice - price) * tPosSell * unit;
