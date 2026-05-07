@@ -1281,18 +1281,32 @@ function refreshChart() {
    表示範囲を winSize バー分に調整（初期ロード・ウィンドウ変更時のみ）
 ====================================================== */
 function updateVisibleRange() {
-  const endIdx   = cursor;
+  if (!allCandles.length) return;
+  const endIdx = cursor;
   const startIdx = Math.max(0, endIdx - winSize + 1);
+  
   try {
+    // 1. 日足の表示範囲を設定
     const range = {
       from: allCandles[startIdx].time,
       to:   allCandles[endIdx].time,
     };
     chart.timeScale().setVisibleRange(range);
-    chartW.timeScale().setVisibleRange(range);
     
-    const w = document.getElementById('chart-wrap').clientWidth;
-    currentBarSpacing = Math.max(MIN_BAR_SPACING, (w - 80) / winSize);
+    // 2. 日足の自動計算された barSpacing を取得し、週足に適用してサイズを揃える
+    // 少し待ってから取得する必要がある場合があるため requestAnimationFrame を使用
+    requestAnimationFrame(() => {
+      const spacing = chart.timeScale().barSpacing();
+      currentBarSpacing = spacing;
+      
+      chartW.timeScale().applyOptions({ 
+        barSpacing: spacing,
+        rightOffset: chart.timeScale().options().rightOffset
+      });
+      
+      // 3. 週足の右端を日足の最新日に合わせる
+      chartW.timeScale().scrollToPosition(0, false); // 右端へ
+    });
   } catch (_) { }
 }
 
