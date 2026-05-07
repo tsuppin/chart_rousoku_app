@@ -531,23 +531,36 @@
       #ma-legend::-webkit-scrollbar { display: none; }
       .ma-entry { padding: 4px 6px; flex-shrink: 0; }
 
-      /* フッターをモバイル向け2段組に */
+      /* フッターをモバイル向け2段固定レイアウトに */
       #footer {
-        padding: 6px 8px;
-        gap: 5px;
-        flex-wrap: wrap;
+        padding: 4px 6px;
+        gap: 0;
+        flex-wrap: nowrap;
+        flex-direction: column;
         justify-content: center;
       }
-      .btn { padding: 10px 14px; font-size: 14px; min-height: 44px; }
+      #footer-row1, #footer-row2 {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        width: 100%;
+      }
+      #footer-row1 { margin-bottom: 4px; }
+      #footer-row2 { flex-wrap: nowrap; }
+      .btn { padding: 8px 10px; font-size: 13px; min-height: 40px; }
       #btn-prev, #btn-next { flex: 1; }
-      #date-badge { font-size: 12px; padding: 8px 10px; min-width: 96px; min-height: 44px; display:flex; align-items:center; justify-content:center; }
-      #btn-auto { min-height: 44px; padding: 10px 14px; font-size: 14px; }
-      .spd-btn { padding: 8px 10px; font-size: 12px; min-height: 36px; }
-      .wbtn { padding: 8px 10px; font-size: 12px; min-height: 36px; }
-      #bar-info { font-size: 10px; }
+      #date-badge { font-size: 11px; padding: 6px 8px; min-width: unset; min-height: 36px; display:flex; align-items:center; justify-content:center; flex:1; }
+      #btn-auto { min-height: 40px; padding: 8px 10px; font-size: 13px; }
+      .spd-btn { padding: 6px 8px; font-size: 11px; min-height: 36px; }
+      .wbtn { padding: 6px 8px; font-size: 11px; min-height: 36px; }
+      #bar-info { font-size: 10px; margin-left: auto; }
       #key-hint { display: none; } /* スマホではキーヒント非表示 */
-      #win-sel { gap: 4px; }
-      #auto-area { gap: 4px; }
+      #win-sel { gap: 3px; flex-shrink: 0; }
+      #auto-area { gap: 3px; flex: 1; }
+      #footer .vdiv { display: none; }
+      #footer-badge { font-size: 10px; font-weight: 700; flex-shrink: 0; }
+      .btn.teal { flex-shrink: 0; padding: 8px 8px; font-size: 12px; }
+      #zoom-area { display: flex; gap: 3px; flex-shrink: 0; }
     }
 
     @media (max-width: 800px) {
@@ -738,40 +751,44 @@
      フッター: ナビゲーション + 表示設定
 ==================================================== -->
 <div id="footer">
-  <!-- 日足バッジ -->
-  <div style="font-size:11px; font-weight:700; color:#fff; background:var(--accent); padding:4px 8px; border-radius:4px; letter-spacing:.5px; flex-shrink:0">日足</div>
+  <!-- 1段目: 日足バッジ + 前日/次日 + 自動めくり -->
+  <div id="footer-row1">
+    <!-- 日足バッジ -->
+    <div id="footer-badge" style="font-size:11px; font-weight:700; color:#fff; background:var(--accent); padding:4px 8px; border-radius:4px; letter-spacing:.5px; flex-shrink:0">日足</div>
 
-  <button class="btn"         id="btn-prev" onclick="goPrev()">◀ 前日</button>
-  <button class="btn primary" id="btn-next" onclick="goNext()">次日 ▶</button>
+    <button class="btn"         id="btn-prev" onclick="goPrev()">◀ 前日</button>
+    <button class="btn primary" id="btn-next" onclick="goNext()">次日 ▶</button>
 
-  <!-- 自動めくり -->
-  <div id="auto-area">
-    <button id="btn-auto" onclick="toggleAuto()" title="スペースキーでも切替">▶ 自動</button>
-    <button class="spd-btn on" data-spd="1000" onclick="setAutoSpeed(1000)">遅</button>
-    <button class="spd-btn"    data-spd="500"  onclick="setAutoSpeed(500)">普通</button>
-    <button class="spd-btn"    data-spd="200"  onclick="setAutoSpeed(200)">速</button>
+    <!-- 自動めくり -->
+    <div id="auto-area">
+      <button id="btn-auto" onclick="toggleAuto()" title="スペースキーでも切替">▶ 自動</button>
+      <button class="spd-btn on" data-spd="1000" onclick="setAutoSpeed(1000)">遅</button>
+      <button class="spd-btn"    data-spd="500"  onclick="setAutoSpeed(500)">普通</button>
+      <button class="spd-btn"    data-spd="200"  onclick="setAutoSpeed(200)">速</button>
+    </div>
   </div>
 
-  <div id="date-badge">----/--/--</div>
+  <!-- 2段目: 初期位置設定 + 期間 + ズーム + 日付/バー数 -->
+  <div id="footer-row2">
+    <button class="btn teal" onclick="openInitModal()">初期位置設定</button>
 
-  <button class="btn teal" onclick="openInitModal()">初期位置設定</button>
+    <div id="win-sel">
+      <button class="wbtn on"    onclick="setWindow(60)">3月</button>
+      <button class="wbtn" onclick="setWindow(120)">6月</button>
+      <button class="wbtn"    onclick="setWindow(240)">1年</button>
+    </div>
 
-  <div class="vdiv" style="height:24px"></div>
+    <!-- ズームボタン -->
+    <div id="zoom-area">
+      <button class="wbtn" id="btn-zoom-in"  onclick="zoomIn()"  title="拡大">&#xFF0B;</button>
+      <button class="wbtn" id="btn-zoom-out" onclick="zoomOut()" title="縮小">&#xFF0D;</button>
+      <button class="wbtn" id="btn-zoom-fit" onclick="zoomFit()" title="ウィンドウサイズにフィット">fit</button>
+    </div>
 
-  <div id="win-sel">
-    <button class="wbtn on"    onclick="setWindow(60)">3月</button>
-    <button class="wbtn" onclick="setWindow(120)">6月</button>
-    <button class="wbtn"    onclick="setWindow(240)">1年</button>
+    <div id="date-badge">----/--/--</div>
+    <div id="bar-info">--/-- バー</div>
   </div>
 
-  <!-- ズームボタン -->
-  <div style="display:flex; gap:3px; align-items:center;">
-    <button class="wbtn" id="btn-zoom-in"  onclick="zoomIn()"  title="拡大">&#xFF0B;</button>
-    <button class="wbtn" id="btn-zoom-out" onclick="zoomOut()" title="縮小">&#xFF0D;</button>
-    <button class="wbtn" id="btn-zoom-fit" onclick="zoomFit()" title="ウィンドウサイズにフィット">fit</button>
-  </div>
-
-  <div id="bar-info">--/-- バー</div>
   <div id="key-hint">← →: 移動　Space: 自動　＋ー: ズーム　0: フィット</div>
 </div>
 
