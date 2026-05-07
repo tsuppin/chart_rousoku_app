@@ -1276,8 +1276,7 @@ function refreshChart() {
     const wMA = calcMA(weekly, d.p);
     maSeriesW[d.p].setData(wMA);
   }
-
-  updateVisibleRange();
+  // ※ ここで updateVisibleRange() を呼ばないことでズームを保持
 }
 
 /* ======================================================
@@ -1366,7 +1365,7 @@ function setWindow(size) {
   const labels = { 60: '3月', 120: '6月', 240: '1年' };
   document.querySelectorAll('.wbtn')
           .forEach(b => b.classList.toggle('on', b.textContent.trim() === labels[size]));
-  // winSize変更時はsetVisibleRangeで初期化（currentBarSpacingも更新される）
+  // ボタンクリック時は強制的に表示範囲をリセット
   updateVisibleRange();
 }
 
@@ -1375,15 +1374,17 @@ function setWindow(size) {
 ====================================================== */
 function zoomIn() {
   currentBarSpacing = Math.min(currentBarSpacing * 1.4, MAX_BAR_SPACING);
-  chart.timeScale().applyOptions({ barSpacing: currentBarSpacing });
-  chartW.timeScale().applyOptions({ barSpacing: currentBarSpacing });
+  const options = { barSpacing: currentBarSpacing };
+  chart.timeScale().applyOptions(options);
+  chartW.timeScale().applyOptions(options);
   scrollKeepZoom();
 }
  
 function zoomOut() {
   currentBarSpacing = Math.max(currentBarSpacing / 1.4, MIN_BAR_SPACING);
-  chart.timeScale().applyOptions({ barSpacing: currentBarSpacing });
-  chartW.timeScale().applyOptions({ barSpacing: currentBarSpacing });
+  const options = { barSpacing: currentBarSpacing };
+  chart.timeScale().applyOptions(options);
+  chartW.timeScale().applyOptions(options);
   scrollKeepZoom();
 }
 
