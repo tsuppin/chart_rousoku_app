@@ -179,13 +179,39 @@
     }
     #chart-wrap {
       flex: 1;
+      display: flex;
+      flex-direction: column;
       position: relative;
       min-height: 0;
       overflow: hidden;
+      background: var(--bg);
     }
-    #chart { 
-      position: absolute; 
-      top: 0; left: 0; right: 0; bottom: 0; 
+    .chart-container {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+    }
+    #chart-daily {
+      flex: 1.3; /* 日足を少し大きく表示 */
+    }
+    #chart-weekly {
+      flex: 1;
+      border-top: 1px solid var(--border);
+    }
+    /* チャートタイトルラベル */
+    .chart-label {
+      position: absolute;
+      top: 10px;
+      left: 14px;
+      z-index: 10;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--dim);
+      background: rgba(15, 17, 23, 0.7);
+      padding: 3px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      border: 1px solid var(--border);
     }
 
     /* =========================================================
@@ -627,7 +653,15 @@
       <div class="loader-ring"></div>
       <div id="load-msg">データ読込中...</div>
     </div>
-    <div id="chart"></div>
+    
+    <div id="chart-daily" class="chart-container">
+      <div class="chart-label">日足</div>
+    </div>
+    
+    <div id="chart-weekly" class="chart-container">
+      <div class="chart-label">週足</div>
+    </div>
+    
     <div id="swipe-hint">← 左スワイプ：前日　右スワイプ：次日 →</div>
   </div>
 
@@ -926,10 +960,14 @@ const MA_DEFS = [
 /* ======================================================
    状態変数
 ====================================================== */
-let chart        = null;   // Lightweight Charts インスタンス
-let candleSeries = null;   // ローソク足シリーズ
-let closeSeries  = null;   // 終値ラインシリーズ（白）
-const maSeries   = {};     // { period: series }
+let chart        = null;   // 日足チャート
+let chartW       = null;   // 週足チャート
+let candleSeries = null;   // 日足ローソク
+let candleSeriesW = null;  // 週足ローソク
+let closeSeries  = null;   // 日足終値ライン
+let closeSeriesW = null;   // 週足終値ライン
+const maSeries   = {};     // 日足MA { period: series }
+const maSeriesW  = {};     // 週足MA { period: series }
 const maVisible  = {};     // { period: bool }
 
 let allCandles = [];       // 全ローソクデータ配列
@@ -956,11 +994,8 @@ MA_DEFS.forEach(d => {
 ====================================================== */
 function initChart() {
   const wrap = document.getElementById('chart-wrap');
-  const el   = document.getElementById('chart');
-
-  chart = LightweightCharts.createChart(el, {
-    width:  wrap.clientWidth || 800,
-    height: wrap.clientHeight || 400,
+  
+  const chartOptions = {
     layout: {
       background: { type: 'solid', color: '#0f1117' },
       textColor:  '#787b86',
@@ -968,13 +1003,13 @@ function initChart() {
       fontSize:   11,
     },
     grid: {
-      vertLines: { color: 'rgba(42,46,66,.65)' },
-      horzLines: { color: 'rgba(42,46,66,.65)' },
+      vertLines: { color: 'rgba(42,46,66,.4)' },
+      horzLines: { color: 'rgba(42,46,66,.4)' },
     },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
-      vertLine: { color: '#4a5070', labelBackgroundColor: '#2962ff' },
-      horzLine: { color: '#4a5070', labelBackgroundColor: '#2962ff' },
+      vertLine: { color: '#4a5070', labelBackgroundColor: '#2962ff', style: 2 },
+      horzLine: { color: '#4a5070', labelBackgroundColor: '#2962ff', style: 2 },
     },
     rightPriceScale: { borderColor: '#2a2e42' },
     timeScale: {
@@ -984,82 +1019,124 @@ function initChart() {
       barSpacing:     6,
       rightOffset:    3,
     },
+    handleScroll: { vertTouchDrag: false },
+  };
+
+  // --- 日足チャート ---
+  chart = LightweightCharts.createChart(document.getElementById('chart-daily'), {
+    ...chartOptions,
+    width: wrap.clientWidth,
+    height: wrap.clientHeight * 0.55,
   });
 
-  /* ローソク足シリーズ */
   candleSeries = chart.addCandlestickSeries({
-    upColor:         '#f23645',
-    downColor:       '#26a69a',
-    borderUpColor:   '#f23645',
-    borderDownColor: '#26a69a',
-    wickUpColor:     '#f23645',
-    wickDownColor:   '#26a69a',
-    priceLineVisible: false,
+    upColor: '#f23645', downColor: '#26a69a', borderUpColor: '#f23645', borderDownColor: '#26a69a',
+    wickUpColor: '#f23645', wickDownColor: '#26a69a', priceLineVisible: false,
   });
 
-  /* MA シリーズ */
+  closeSeries = chart.addLineSeries({ color: '#9e9e9e', lineWidth: 1, priceLineVisible: false, visible: false });
+
+  // --- 週足チャート ---
+  chartW = LightweightCharts.createChart(document.getElementById('chart-weekly'), {
+    ...chartOptions,
+    width: wrap.clientWidth,
+    height: wrap.clientHeight * 0.45,
+  });
+
+  candleSeriesW = chartW.addCandlestickSeries({
+    upColor: '#f23645', downColor: '#26a69a', borderUpColor: '#f23645', borderDownColor: '#26a69a',
+    wickUpColor: '#f23645', wickDownColor: '#26a69a', priceLineVisible: false,
+  });
+
+  closeSeriesW = chartW.addLineSeries({ color: '#9e9e9e', lineWidth: 1, priceLineVisible: false, visible: false });
+
+  // --- MAシリーズ作成 (日足・週足共通) ---
   for (const d of MA_DEFS) {
-    maSeries[d.p] = chart.addLineSeries({
-      color:                   d.color,
-      lineWidth:               1,
-      priceLineVisible:        false,
-      lastValueVisible:        false,
-      crosshairMarkerVisible:  false,
-      visible:                 maVisible[d.p],
-    });
+    const opts = {
+      color: d.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
+      crosshairMarkerVisible: false, visible: maVisible[d.p],
+    };
+    maSeries[d.p] = chart.addLineSeries(opts);
+    maSeriesW[d.p] = chartW.addLineSeries(opts);
     
-    // UIの初期状態反映
     if (!maVisible[d.p]) {
       const el = document.getElementById(`mae-${d.p}`);
       if (el) el.classList.add('off');
     }
   }
 
-  /* 終値ライン（グレー）- デフォルト非表示 */
-  closeSeries = chart.addLineSeries({
-    color:                  '#9e9e9e',
-    lineWidth:              1,
-    priceLineVisible:       false,
-    lastValueVisible:       false,
-    crosshairMarkerVisible: false,
-    visible:                false,
+  /* クロスヘア連動 */
+  chart.subscribeCrosshairMove(param => {
+    onCrosshair(param, 'daily');
+    chartW.setCrosshairPosition(param.paneViews ? param.time : undefined, undefined, candleSeriesW);
   });
-
-  /* クロスヘア移動イベント */
-  chart.subscribeCrosshairMove(onCrosshair);
+  chartW.subscribeCrosshairMove(param => {
+    onCrosshair(param, 'weekly');
+    chart.setCrosshairPosition(param.paneViews ? param.time : undefined, undefined, candleSeries);
+  });
 
   /* リサイズ対応 */
   const ro = new ResizeObserver(() => {
-    chart.resize(wrap.clientWidth, wrap.clientHeight);
+    const w = wrap.clientWidth;
+    const h = wrap.clientHeight;
+    chart.resize(w, h * 0.55);
+    chartW.resize(w, h * 0.45);
   });
   ro.observe(wrap);
+}
+
+/** 日付から月曜日(週の開始日)を取得 */
+function getMonday(dateStr) {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff)).toISOString().slice(0, 10);
+}
+
+/** 指定カーソル時点までの週足データを生成 */
+function calcWeeklyData(dailyCandles, endIdx) {
+  const weekly = [];
+  let currentW = null;
+
+  for (let i = 0; i <= endIdx; i++) {
+    const d = dailyCandles[i];
+    const monday = getMonday(d.time);
+
+    if (!currentW || currentW.time !== monday) {
+      if (currentW) weekly.push(currentW);
+      currentW = { time: monday, open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume };
+    } else {
+      currentW.high = Math.max(currentW.high, d.high);
+      currentW.low = Math.min(currentW.low, d.low);
+      currentW.close = d.close;
+      currentW.volume += d.volume;
+    }
+  }
+  if (currentW) weekly.push(currentW);
+  return weekly;
 }
 
 /* ======================================================
    クロスヘア: ツールチップ更新
 ====================================================== */
-function onCrosshair(param) {
+function onCrosshair(param, source) {
   if (!param || !param.time) {
-    showBarInfo(cursor); // ホバーが外れたら現在バーに戻す
+    if (source === 'daily') showBarInfo(cursor);
     return;
   }
-  // ローソク表示中ならローソクデータ、非表示なら終値ラインからOHLC取得
-  const cd = candleVisible
-    ? param.seriesData.get(candleSeries)
-    : param.seriesData.get(closeSeries);
-  if (cd) {
-    // 終値ラインの場合は {time, value} 形式なので変換
-    const candle = cd.open !== undefined ? cd : {
-      time: cd.time, open: cd.value, high: cd.value, low: cd.value, close: cd.value
-    };
-    // allCandles から正しいOHLCVを引く
+  
+  const targetSeries = source === 'daily' ? candleSeries : candleSeriesW;
+  const cd = param.seriesData.get(targetSeries);
+  
+  if (cd && source === 'daily') {
     const tStr = toDateStr(cd.time || param.time);
     const idx = allCandles.findIndex(x => toDateStr(x.time) === tStr);
     if (idx >= 0) displayOHLC(allCandles[idx]);
   }
 
+  const targetMAs = source === 'daily' ? maSeries : maSeriesW;
   for (const d of MA_DEFS) {
-    const mv = param.seriesData.get(maSeries[d.p]);
+    const mv = param.seriesData.get(targetMAs[d.p]);
     setMAText(d.p, mv ? mv.value : null);
   }
 }
@@ -1174,20 +1251,27 @@ async function switchStock(code) {
    チャートデータ全更新（goPrev や初期ロード時）
 ====================================================== */
 function refreshChart() {
-  const sliced = allCandles.slice(0, cursor + 1);
+  if (!allCandles.length) return;
+  
+  const slicedD = allCandles.slice(0, cursor + 1);
+  candleSeries.setData(slicedD);
+  closeSeries.setData(slicedD.map(c => ({ time: c.time, value: c.close })));
 
-  // ローソク足: 0 ～ cursor
-  candleSeries.setData(sliced);
-
-  // 終値ライン
-  closeSeries.setData(sliced.map(c => ({ time: c.time, value: c.close })));
-
-  // MA線: calcMA の配列インデックスと allCandles の対応
-  //   allMAs[p][k] は allCandles[k + p - 1] に対応
-  //   cursor = n のとき k <= n - p + 1 なので slice(0, n-p+2)
+  // 日足MA
   for (const d of MA_DEFS) {
     const maEnd = Math.max(0, cursor - d.p + 2);
     maSeries[d.p].setData(allMAs[d.p].slice(0, maEnd));
+  }
+
+  // 週足計算 & セット
+  const weekly = calcWeeklyData(allCandles, cursor);
+  candleSeriesW.setData(weekly);
+  closeSeriesW.setData(weekly.map(c => ({ time: c.time, value: c.close })));
+
+  // 週足MA (その場計算)
+  for (const d of MA_DEFS) {
+    const wMA = calcMA(weekly, d.p);
+    maSeriesW[d.p].setData(wMA);
   }
 
   updateVisibleRange();
@@ -1200,19 +1284,24 @@ function updateVisibleRange() {
   const endIdx   = cursor;
   const startIdx = Math.max(0, endIdx - winSize + 1);
   try {
-    chart.timeScale().setVisibleRange({
+    const range = {
       from: allCandles[startIdx].time,
       to:   allCandles[endIdx].time,
-    });
-    // setVisibleRange後はbarSpacingが自動調整されるので追跡値を更新
+    };
+    chart.timeScale().setVisibleRange(range);
+    chartW.timeScale().setVisibleRange(range);
+    
     const w = document.getElementById('chart-wrap').clientWidth;
     currentBarSpacing = Math.max(MIN_BAR_SPACING, (w - 80) / winSize);
-  } catch (_) { /* 起動直後などでエラーが出る場合は無視 */ }
+  } catch (_) { }
 }
 
 /** ズームを保持したまま最新バーを画面右端にスクロール */
 function scrollKeepZoom() {
-  try { chart.timeScale().scrollToRealTime(); } catch (_) {}
+  try { 
+    chart.timeScale().scrollToRealTime(); 
+    chartW.timeScale().scrollToRealTime(); 
+  } catch (_) {}
 }
 
 /* ======================================================
@@ -1223,43 +1312,16 @@ function scrollKeepZoom() {
 function goNext() {
   if (!allCandles.length || cursor >= allCandles.length - 1) return;
   cursor++;
-  const c = allCandles[cursor];
-
-  // ローソク足は最末尾に1本追加（O(1)）
-  candleSeries.update(c);
-
-  // 終値ラインも1点追加
-  closeSeries.update({ time: c.time, value: c.close });
-
-  // MA各線: 新しい1点が利用可能なら追加（O(1)）
-  for (const d of MA_DEFS) {
-    const maIdx = cursor - d.p + 1;
-    if (maIdx >= 0 && maIdx < allMAs[d.p].length) {
-      maSeries[d.p].update(allMAs[d.p][maIdx]);
-    }
-  }
-
-  // ズームを保持したまま最新バーを画面右にアライン
+  refreshChart(); // 週足連動のため一括更新
   scrollKeepZoom();
   showBarInfo(cursor);
 }
 
 /** 1日戻る（ズーム保持） */
 function goPrev() {
-  if (!allCandles.length) return;
-  if (cursor <= 0) return;
+  if (!allCandles.length || cursor <= 0) return;
   cursor--;
-
-  // データを切り詰めて再セット（setDataはバックワード時に必須）
-  const sliced = allCandles.slice(0, cursor + 1);
-  candleSeries.setData(sliced);
-  closeSeries.setData(sliced.map(c => ({ time: c.time, value: c.close })));
-  for (const d of MA_DEFS) {
-    const maEnd = Math.max(0, cursor - d.p + 2);
-    maSeries[d.p].setData(allMAs[d.p].slice(0, maEnd));
-  }
-
-  // ズームを保持したまま最新バーにスクロール
+  refreshChart();
   scrollKeepZoom();
   showBarInfo(cursor);
 }
@@ -1287,6 +1349,20 @@ function setWindow(size) {
 /* ======================================================
    OHLCV 表示更新
 ====================================================== */
+function zoomIn() {
+  currentBarSpacing = Math.min(currentBarSpacing * 1.4, MAX_BAR_SPACING);
+  chart.timeScale().applyOptions({ barSpacing: currentBarSpacing });
+  chartW.timeScale().applyOptions({ barSpacing: currentBarSpacing });
+  scrollKeepZoom();
+}
+ 
+function zoomOut() {
+  currentBarSpacing = Math.max(currentBarSpacing / 1.4, MIN_BAR_SPACING);
+  chart.timeScale().applyOptions({ barSpacing: currentBarSpacing });
+  chartW.timeScale().applyOptions({ barSpacing: currentBarSpacing });
+  scrollKeepZoom();
+}
+
 function displayOHLC(c) {
   // 前日終値で騰落計算
   const idx       = allCandles.findIndex(x => x.time === c.time);
@@ -1357,6 +1433,7 @@ function setLoading(show, msg = '') {
 function toggleMA(period) {
   maVisible[period] = !maVisible[period];
   maSeries[period].applyOptions({ visible: maVisible[period] });
+  maSeriesW[period].applyOptions({ visible: maVisible[period] });
   document.getElementById(`mae-${period}`).classList.toggle('off', !maVisible[period]);
 }
 
@@ -1364,6 +1441,7 @@ function toggleMA(period) {
 function toggleCandle() {
   candleVisible = !candleVisible;
   candleSeries.applyOptions({ visible: candleVisible });
+  candleSeriesW.applyOptions({ visible: candleVisible });
   document.getElementById('tog-candle').classList.toggle('off', !candleVisible);
 }
 
@@ -1371,23 +1449,8 @@ function toggleCandle() {
 function toggleClose() {
   closeVisible = !closeVisible;
   closeSeries.applyOptions({ visible: closeVisible });
+  closeSeriesW.applyOptions({ visible: closeVisible });
   document.getElementById('tog-close').classList.toggle('off', !closeVisible);
-}
-
-/* ======================================================
-   ズーム操作（barSpacingを変更しズーム保持）
-====================================================== */
-function zoomIn() {
-  currentBarSpacing = Math.min(currentBarSpacing * 1.4, MAX_BAR_SPACING);
-  chart.timeScale().applyOptions({ barSpacing: currentBarSpacing });
-  // 最新バーが画面内に再表示されるようにスクロール
-  try { chart.timeScale().scrollToRealTime(); } catch (_) {}
-}
-
-function zoomOut() {
-  currentBarSpacing = Math.max(currentBarSpacing / 1.4, MIN_BAR_SPACING);
-  chart.timeScale().applyOptions({ barSpacing: currentBarSpacing });
-  try { chart.timeScale().scrollToRealTime(); } catch (_) {}
 }
 
 /** 現在の winSize にピッタリと入るズームにリセット */
