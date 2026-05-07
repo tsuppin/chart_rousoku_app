@@ -1096,7 +1096,8 @@ function initChart() {
 
 /** 日付から月曜日(週の開始日)を取得 */
 function getMonday(dateStr) {
-  const d = new Date(dateStr);
+  const str = toDateStr(dateStr);
+  const d = new Date(str);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   return new Date(d.setDate(diff)).toISOString().slice(0, 10);
@@ -1647,7 +1648,7 @@ function setCandleColor(idx, actionType) {
     allCandles[idx].color = color;
     allCandles[idx].wickColor = color;
     allCandles[idx].borderColor = color;
-    candleSeries.update(allCandles[idx]);
+    candleSeries.update({ ...allCandles[idx] });
   }
 }
 
