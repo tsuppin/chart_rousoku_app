@@ -56,6 +56,11 @@
       height: 100vh;
       height: 100dvh;
       user-select: none;
+      -webkit-user-select: none;
+    }
+    .modal-card, .modal-card * {
+      user-select: text;
+      -webkit-user-select: text;
     }
 
     /* =========================================================
@@ -814,6 +819,7 @@
       </table>
     </div>
     <div class="m-acts">
+      <button class="m-btn teal" onclick="copyHistory()">履歴をコピー</button>
       <button class="m-btn cancel" onclick="closeHistory()">閉じる</button>
     </div>
   </div>
@@ -1808,6 +1814,21 @@ function showHistory() {
 
 function closeHistory() {
   document.getElementById('hist-modal').classList.remove('open');
+}
+
+/** 取引履歴をクリップボードにコピー (TSV形式) */
+function copyHistory() {
+  if (!tHistory.length) { alert('履歴がありません'); return; }
+  let text = "日時\t操作\t数量\t価格\t損益\n";
+  for (const h of tHistory) {
+    text += `${toYYMMDD(h.time)}\t${h.type}\t${h.qty}\t${h.price}\t${h.pnl}\n`;
+  }
+  navigator.clipboard.writeText(text).then(() => {
+    alert('クリップボードにコピーしました');
+  }).catch(err => {
+    console.error('Copy failed', err);
+    alert('コピーに失敗しました');
+  });
 }
 
 /* ======================================================
