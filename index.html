@@ -185,14 +185,17 @@
       min-height: 0;
       overflow: hidden;
       background: var(--bg);
+      /* モバイルでの高さガタつき防止 */
+      height: 100%;
     }
     .chart-container {
       flex: 1;
       position: relative;
       min-height: 0;
+      width: 100%;
     }
     #chart-daily {
-      flex: 1.3; /* 日足を少し大きく表示 */
+      flex: 1.3;
     }
     #chart-weekly {
       flex: 1;
@@ -1286,27 +1289,34 @@ function updateVisibleRange() {
   const startIdx = Math.max(0, endIdx - winSize + 1);
   
   try {
-    // 1. 日足の表示範囲を設定
+    // 日足の表示範囲（日付）
     const range = {
       from: allCandles[startIdx].time,
       to:   allCandles[endIdx].time,
     };
-    chart.timeScale().setVisibleRange(range);
+
+    // 画面幅から最適な barSpacing を直接計算（モバイルでの遅延防止）
+    const wrapW = document.getElementById('chart-wrap').clientWidth;
+    const priceScaleW = 62; // 右価格スケールの概算幅
+    const spacing = Math.max(MIN_BAR_SPACING, (wrapW - priceScaleW - 20) / winSize);
+    currentBarSpacing = spacing;
+
+    // 両方のチャートに同時に適用
+    const timeOptions = {
+      barSpacing: spacing,
+      rightOffset: 3,
+    };
     
-    // 2. 日足の自動計算された barSpacing を取得し、週足に適用してサイズを揃える
-    // 少し待ってから取得する必要がある場合があるため requestAnimationFrame を使用
-    requestAnimationFrame(() => {
-      const spacing = chart.timeScale().barSpacing();
-      currentBarSpacing = spacing;
-      
-      chartW.timeScale().applyOptions({ 
-        barSpacing: spacing,
-        rightOffset: chart.timeScale().options().rightOffset
-      });
-      
-      // 3. 週足の右端を日足の最新日に合わせる
-      chartW.timeScale().scrollToPosition(0, false); // 右端へ
-    });
+    chart.timeScale().applyOptions(timeOptions);
+    chartW.timeScale().applyOptions(timeOptions);
+    
+    chart.timeScale().setVisibleRange(range);
+
+    // スクロール同期（週足の右端を合わせる）
+    setTimeout(() => {
+      chartW.timeScale().scrollToPosition(0, false);
+    }, 0);
+
   } catch (_) { }
 }
 
