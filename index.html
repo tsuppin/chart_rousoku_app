@@ -581,8 +581,8 @@
      HEADER: 銘柄選択 + 価格情報
 ==================================================== -->
 <div id="header">
-  <div id="app-title">相場流 チャートめくり</div>
-  <div class="vdiv"></div>
+  <div id="app-title" style="display: none;">相場流 チャートめくり</div>
+  <div class="vdiv" style="display: none;"></div>
 
   <div id="stock-selector">
     <input id="stock-search" type="text" placeholder="コード/名前" oninput="filterStocks(this.value)">
@@ -592,7 +592,7 @@
   <div class="vdiv"></div>
 
   <div id="price-area">
-    <div id="stock-id">
+    <div id="stock-id" style="display: none;">
       <span id="s-code">----</span>
       <span id="s-name">----</span>
     </div>
@@ -712,7 +712,7 @@
     </div>
 
     <div class="tp-section tp-pos-section" style="padding: 6px 12px 8px;">
-      <div class="tp-pos-header">📈 ポジション（建玉）</div>
+      <div class="tp-pos-header" style="display: none;">📈 ポジション（建玉）</div>
       
       <div class="tp-pos-grid">
         <div class="tp-pos-col">
@@ -720,7 +720,7 @@
           <button class="tp-arrow" onclick="changePos('sell', 1)">▲</button>
           <div class="tp-pos-count down-color" id="pos-sell">0</div>
           <button class="tp-arrow" onclick="changePos('sell', -1)">▼</button>
-          <div style="font-size: 9px; color: var(--dim); margin-top: 4px;" id="avg-sell-price">avg: -</div>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 4px; display: none;" id="avg-sell-price">avg: -</div>
         </div>
         
         <div class="tp-pos-center">
@@ -733,11 +733,11 @@
           <button class="tp-arrow" onclick="changePos('buy', 1)">▲</button>
           <div class="tp-pos-count up-color" id="pos-buy">0</div>
           <button class="tp-arrow" onclick="changePos('buy', -1)">▼</button>
-          <div style="font-size: 9px; color: var(--dim); margin-top: 4px;" id="avg-buy-price">avg: -</div>
+          <div style="font-size: 9px; color: var(--dim); margin-top: 4px; display: none;" id="avg-buy-price">avg: -</div>
         </div>
       </div>
 
-      <div class="tp-unit">
+      <div class="tp-unit" style="display: none;">
         <span>×</span>
         <input type="number" id="trade-unit" value="100" step="100" min="1" oninput="updateTradePanel()">
         <span>株</span>
@@ -753,7 +753,7 @@
   <!-- 1段目: 日足バッジ + 前日/次日 + 自動めくり -->
   <div id="footer-row1">
     <!-- 日足バッジ -->
-    <div id="footer-badge" style="font-size:11px; font-weight:700; color:#fff; background:var(--accent); padding:4px 8px; border-radius:4px; letter-spacing:.5px; flex-shrink:0">日足</div>
+    <div id="footer-badge" style="font-size:11px; font-weight:700; color:#fff; background:var(--accent); padding:4px 8px; border-radius:4px; letter-spacing:.5px; flex-shrink:0; display: none;">日足</div>
 
     <button class="btn"         id="btn-prev" onclick="goPrev()">◀ 前日</button>
     <button class="btn primary" id="btn-next" onclick="goNext()">次日 ▶</button>
@@ -762,14 +762,14 @@
     <div id="auto-area">
       <button id="btn-auto" onclick="toggleAuto()" title="スペースキーでも切替">▶ 自動</button>
       <button class="spd-btn on" data-spd="1000" onclick="setAutoSpeed(1000)">遅</button>
-      <button class="spd-btn"    data-spd="500"  onclick="setAutoSpeed(500)">普通</button>
+      <button class="spd-btn"    data-spd="500"  onclick="setAutoSpeed(500)">普</button>
       <button class="spd-btn"    data-spd="200"  onclick="setAutoSpeed(200)">速</button>
     </div>
   </div>
 
   <!-- 2段目: 初期位置設定 + 期間 + ズーム + 日付/バー数 -->
   <div id="footer-row2">
-    <button class="btn teal" onclick="openInitModal()">初期位置</button>
+    <button class="btn teal" onclick="openInitModal()">初期</button>
 
     <div id="win-sel">
       <button class="wbtn on"    onclick="setWindow(60)">3</button>
@@ -1396,7 +1396,7 @@ function setWindow(size) {
    OHLCV 表示更新
 ====================================================== */
 function zoomIn() {
-  currentBarSpacing = Math.min(currentBarSpacing * 1.4, MAX_BAR_SPACING);
+  currentBarSpacing = Math.min(currentBarSpacing * 1.15, MAX_BAR_SPACING);
   const options = { barSpacing: currentBarSpacing };
   chart.timeScale().applyOptions(options);
   chartW.timeScale().applyOptions(options);
@@ -1404,7 +1404,7 @@ function zoomIn() {
 }
  
 function zoomOut() {
-  currentBarSpacing = Math.max(currentBarSpacing / 1.4, MIN_BAR_SPACING);
+  currentBarSpacing = Math.max(currentBarSpacing / 1.15, MIN_BAR_SPACING);
   const options = { barSpacing: currentBarSpacing };
   chart.timeScale().applyOptions(options);
   chartW.timeScale().applyOptions(options);
@@ -1932,7 +1932,9 @@ function filterStocks(val) {
 ====================================================== */
 buildStockSelect();
 initChart();
-switchStock('1801');
+const stockCodes = Object.keys(STOCK_INFO);
+const randomCode = stockCodes[Math.floor(Math.random() * stockCodes.length)];
+switchStock(randomCode);
 </script>
 </body>
 </html>
