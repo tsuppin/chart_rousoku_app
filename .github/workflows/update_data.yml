@@ -1,9 +1,9 @@
 name: 株価データ自動更新
 
 on:
-  schedule:
-    # 毎日 21:00 UTC = 日本時間 翌 06:00 に実行
-    - cron: '0 21 * * *'
+  # schedule:
+  #   # 毎日 21:00 UTC = 日本時間 翌 06:00 に実行
+  #   - cron: '0 21 * * *'
   # 手動実行も可能にする
   workflow_dispatch:
 
