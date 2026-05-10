@@ -113,26 +113,26 @@
     }
 
     /* 価格情報エリア */
-    #price-area { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    #price-area { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; flex: 1; min-width: 0; }
 
-    #stock-id { display: flex; flex-direction: column; line-height: 1.3; }
+    #stock-id { display: flex; flex-direction: column; line-height: 1.3; flex-shrink: 0; }
     #s-code   { font-size: 11px; color: var(--dim); }
     #s-name   { font-size: 13px; font-weight: 500; }
 
-    #price-group { display: flex; align-items: baseline; gap: 8px; }
+    #price-group { display: flex; align-items: baseline; gap: 5px; flex-shrink: 0; white-space: nowrap; }
     #cur-price {
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 700;
       font-family: 'Roboto Mono', monospace;
       letter-spacing: -1px;
-      min-width: 80px;
+      min-width: 0;
     }
-    #price-chg { font-size: 12px; font-family: 'Roboto Mono', monospace; }
+    #price-chg { font-size: 11px; font-family: 'Roboto Mono', monospace; white-space: nowrap; }
 
-    .ohlcv { display: flex; gap: 10px; }
-    .oitem  { display: flex; flex-direction: column; }
-    .olbl   { font-size: 9px; color: var(--dim); }
-    .oval   { font-size: 12px; font-family: 'Roboto Mono', monospace; }
+    .ohlcv { display: flex; gap: 6px; flex-shrink: 1; min-width: 0; overflow: hidden; }
+    .oitem  { display: flex; flex-direction: column; min-width: 0; flex-shrink: 1; }
+    .olbl   { font-size: 8px; color: var(--dim); white-space: nowrap; }
+    .oval   { font-size: 11px; font-family: 'Roboto Mono', monospace; white-space: nowrap; }
 
     .up   { color: var(--up)   !important; }
     .down { color: var(--down) !important; }
