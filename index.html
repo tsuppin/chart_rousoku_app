@@ -715,12 +715,13 @@
       <div class="tp-pos-header" style="display: none;">📈 ポジション（建玉）</div>
       
       <div class="tp-pos-grid">
-        <div class="tp-pos-col">
-          <div class="tp-pos-title down-color">売り</div>
-          <button class="tp-arrow" onclick="changePos('sell', 1)">▲</button>
-          <div class="tp-pos-count down-color" id="pos-sell">0</div>
-          <button class="tp-arrow" onclick="changePos('sell', -1)">▼</button>
-          <div style="font-size: 9px; color: var(--dim); margin-top: 4px; display: none;" id="avg-sell-price">avg: -</div>
+        <!-- 売り: タイトル + ▲数字▼ を横並び -->
+        <div class="tp-pos-col" style="flex-direction: row; align-items: center; gap: 4px; width: auto;">
+          <div class="tp-pos-title down-color" style="margin-bottom: 0;">売り</div>
+          <button class="tp-arrow" onclick="changePos('sell', 1)" style="width: 28px; height: 28px;">▲</button>
+          <div class="tp-pos-count down-color" id="pos-sell" style="font-size: 18px; margin: 0 2px;">0</div>
+          <button class="tp-arrow" onclick="changePos('sell', -1)" style="width: 28px; height: 28px;">▼</button>
+          <div style="font-size: 9px; color: var(--dim); display: none;" id="avg-sell-price">avg: -</div>
         </div>
         
         <div class="tp-pos-center">
@@ -728,12 +729,13 @@
           <button class="tp-btn-settle" onclick="settleAll()">🔄 区切る</button>
         </div>
 
-        <div class="tp-pos-col">
-          <div class="tp-pos-title up-color">買い</div>
-          <button class="tp-arrow" onclick="changePos('buy', 1)">▲</button>
-          <div class="tp-pos-count up-color" id="pos-buy">0</div>
-          <button class="tp-arrow" onclick="changePos('buy', -1)">▼</button>
-          <div style="font-size: 9px; color: var(--dim); margin-top: 4px; display: none;" id="avg-buy-price">avg: -</div>
+        <!-- 買い: タイトル + ▲数字▼ を横並び -->
+        <div class="tp-pos-col" style="flex-direction: row; align-items: center; gap: 4px; width: auto;">
+          <button class="tp-arrow" onclick="changePos('buy', -1)" style="width: 28px; height: 28px;">▼</button>
+          <div class="tp-pos-count up-color" id="pos-buy" style="font-size: 18px; margin: 0 2px;">0</div>
+          <button class="tp-arrow" onclick="changePos('buy', 1)" style="width: 28px; height: 28px;">▲</button>
+          <div class="tp-pos-title up-color" style="margin-bottom: 0;">買い</div>
+          <div style="font-size: 9px; color: var(--dim); display: none;" id="avg-buy-price">avg: -</div>
         </div>
       </div>
 
