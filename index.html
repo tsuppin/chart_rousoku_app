@@ -514,7 +514,7 @@
     }
     #swipe-hint.hidden { opacity: 0; }
 
-    @media (max-width: 600px) {
+    @media (max-width: 600px), (orientation: portrait) {
       /* ヘッダーをコンパクトに */
       #header { padding: 5px 8px; gap: 6px; min-height: 44px; }
       #app-title { font-size: 11px; }
@@ -563,7 +563,7 @@
       #zoom-area { display: flex; gap: 3px; flex-shrink: 0; }
     }
 
-    @media (max-width: 800px) {
+    @media (max-width: 800px), (orientation: portrait) {
       #main-area { flex-direction: column; }
       #trade-panel {
         width: 100%;
