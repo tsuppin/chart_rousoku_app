@@ -570,8 +570,6 @@
         border-left: none;
         border-top: 1px solid var(--border);
         flex-shrink: 0;
-        max-height: 95px;
-        overflow: hidden;
         display: flex;
         flex-direction: column;
       }
@@ -603,7 +601,7 @@
         flex-shrink: 0;
         gap: 4px;
       }
-      #trade-panel .tp-btn { font-size: 9px; padding: 3px 6px; }
+      #trade-panel .tp-btn { font-size: 9px; padding: 3px 6px; white-space: nowrap; }
 
       /* 両建て時の内訳（pnl-detail）を横並びに */
       #trade-panel #pnl-detail {
