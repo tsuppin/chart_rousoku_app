@@ -570,8 +570,48 @@
         border-left: none;
         border-top: 1px solid var(--border);
         flex-shrink: 0;
-        max-height: 190px;
+        max-height: 95px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
       }
+
+      /* PNL セクション：横一列に圧縮 */
+      #trade-panel .tp-section:first-child {
+        padding: 3px 8px;
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: nowrap;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
+      #trade-panel .tp-row {
+        margin-bottom: 0;
+        flex-shrink: 0;
+        gap: 3px;
+        display: flex;
+        flex-direction: row;
+        align-items: baseline;
+      }
+      #trade-panel .tp-lbl { font-size: 9px; margin-right: 2px; }
+      #trade-panel .tp-val { font-size: 11px; }
+      #trade-panel .tp-actions {
+        margin-top: 0;
+        margin-left: auto;
+        flex-shrink: 0;
+        gap: 4px;
+      }
+      #trade-panel .tp-btn { font-size: 9px; padding: 3px 6px; }
+
+      /* ポジションセクション：コンパクト化 */
+      #trade-panel .tp-pos-section { padding: 4px 8px !important; flex-shrink: 0; }
+      #trade-panel .tp-ratio { font-size: 12px; margin-bottom: 2px; letter-spacing: 1px; }
+      #trade-panel .tp-btn-settle { font-size: 9px; padding: 2px 7px; }
+      #trade-panel .tp-pos-count { font-size: 15px !important; margin: 0 2px !important; }
+      #trade-panel .tp-pos-title { font-size: 10px !important; }
+      #trade-panel .tp-arrow { height: 24px !important; width: 24px !important; font-size: 11px; }
     }
   </style>
 </head>
