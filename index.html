@@ -605,6 +605,20 @@
       }
       #trade-panel .tp-btn { font-size: 9px; padding: 3px 6px; }
 
+      /* 両建て時の内訳（pnl-detail）を横並びに */
+      #trade-panel #pnl-detail {
+        margin: 0 !important;
+        padding-left: 4px !important;
+        border-left: 1px solid var(--border) !important;
+        flex-direction: row !important;
+        gap: 6px !important;
+        align-items: baseline;
+      }
+      #trade-panel #pnl-detail > div {
+        justify-content: flex-start !important;
+        gap: 2px;
+      }
+
       /* ポジションセクション：コンパクト化 */
       #trade-panel .tp-pos-section { padding: 4px 8px !important; flex-shrink: 0; }
       #trade-panel .tp-ratio { font-size: 12px; margin-bottom: 2px; letter-spacing: 1px; }
@@ -731,13 +745,13 @@
         <span class="tp-lbl">評価損益</span>
         <span class="tp-val" id="unrealized-pnl">0円</span>
       </div>
-      <div id="pnl-detail" style="font-size: 11px; margin: -4px 0 10px 0; padding-left: 4px; border-left: 2px solid var(--border); display: none;">
-        <div style="display: flex; justify-content: space-between; color: var(--down);">
-          <span>売 損益:</span>
+      <div id="pnl-detail" style="display: none; font-size: 11px; margin: -4px 0 10px 0; padding-left: 4px; border-left: 2px solid var(--border); flex-direction: column; gap: 2px;">
+        <div style="display: flex; justify-content: space-between; color: var(--down); white-space: nowrap;">
+          <span>売損:</span>
           <span id="unpnl-sell">0円</span>
         </div>
-        <div style="display: flex; justify-content: space-between; color: var(--up);">
-          <span>買 損益:</span>
+        <div style="display: flex; justify-content: space-between; color: var(--up); white-space: nowrap;">
+          <span>買損:</span>
           <span id="unpnl-buy">0円</span>
         </div>
       </div>
@@ -1817,7 +1831,7 @@ function updateTradePanel(currentPrice) {
   // 内訳の更新
   const elDetail = document.getElementById('pnl-detail');
   if (tPosSell > 0 && tPosBuy > 0) {
-    elDetail.style.display = 'block';
+    elDetail.style.display = 'flex';
     document.getElementById('unpnl-sell').textContent = Math.round(unPnlSell).toLocaleString() + '円';
     document.getElementById('unpnl-buy').textContent = Math.round(unPnlBuy).toLocaleString() + '円';
   } else {
