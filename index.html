@@ -623,7 +623,7 @@
       #trade-panel .tp-btn-settle { font-size: 9px; padding: 2px 7px; }
       #trade-panel .tp-pos-count { font-size: 15px !important; margin: 0 2px !important; }
       #trade-panel .tp-pos-title { font-size: 10px !important; }
-      #trade-panel .tp-arrow { height: 24px !important; width: 24px !important; font-size: 11px; }
+      #trade-panel .tp-arrow { height: 24px !important; width: 60px !important; font-size: 11px; }
     }
   </style>
 </head>
@@ -769,9 +769,9 @@
         <!-- 売り: タイトル + ▲数字▼ を横並び -->
         <div class="tp-pos-col" style="flex-direction: row; align-items: center; gap: 4px; width: auto;">
           <div class="tp-pos-title down-color" style="margin-bottom: 0;">売</div>
-          <button class="tp-arrow" onclick="changePos('sell', 1)" style="width: 28px; height: 28px;">▲</button>
+          <button class="tp-arrow" onclick="changePos('sell', 1)" style="width: 70px; height: 28px;">▲</button>
           <div class="tp-pos-count down-color" id="pos-sell" style="font-size: 18px; margin: 0 2px;">0</div>
-          <button class="tp-arrow" onclick="changePos('sell', -1)" style="width: 28px; height: 28px;">▼</button>
+          <button class="tp-arrow" onclick="changePos('sell', -1)" style="width: 70px; height: 28px;">▼</button>
           <div style="font-size: 9px; color: var(--dim); display: none;" id="avg-sell-price">avg: -</div>
         </div>
         
@@ -782,9 +782,9 @@
 
         <!-- 買い: タイトル + ▲数字▼ を横並び -->
         <div class="tp-pos-col" style="flex-direction: row; align-items: center; gap: 4px; width: auto;">
-          <button class="tp-arrow" onclick="changePos('buy', -1)" style="width: 28px; height: 28px;">▼</button>
+          <button class="tp-arrow" onclick="changePos('buy', -1)" style="width: 70px; height: 28px;">▼</button>
           <div class="tp-pos-count up-color" id="pos-buy" style="font-size: 18px; margin: 0 2px;">0</div>
-          <button class="tp-arrow" onclick="changePos('buy', 1)" style="width: 28px; height: 28px;">▲</button>
+          <button class="tp-arrow" onclick="changePos('buy', 1)" style="width: 70px; height: 28px;">▲</button>
           <div class="tp-pos-title up-color" style="margin-bottom: 0;">買</div>
           <div style="font-size: 9px; color: var(--dim); display: none;" id="avg-buy-price">avg: -</div>
         </div>
