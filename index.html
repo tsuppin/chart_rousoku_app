@@ -269,8 +269,8 @@
     
     .tp-pos-count { font-size: 22px; font-weight: 700; font-family: 'Roboto Mono', monospace; margin: 4px 0; }
     
-    .tp-pos-center { display: flex; flex-direction: column; align-items: center; flex: 1; }
-    .tp-ratio { font-size: 16px; font-weight: 700; letter-spacing: 2px; margin-bottom: 6px; font-family: 'Roboto Mono', monospace; }
+    .tp-pos-center { display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 8px; flex: 1; }
+    .tp-ratio { font-size: 16px; font-weight: 700; letter-spacing: 2px; margin: 0; font-family: 'Roboto Mono', monospace; }
     .tp-btn-settle {
       background: transparent; border: 1px solid var(--accent); color: var(--accent);
       padding: 5px 10px; font-size: 11px; font-weight: 700; border-radius: 5px;
@@ -619,7 +619,7 @@
 
       /* ポジションセクション：コンパクト化 */
       #trade-panel .tp-pos-section { padding: 4px 8px !important; flex-shrink: 0; }
-      #trade-panel .tp-ratio { font-size: 12px; margin-bottom: 2px; letter-spacing: 1px; }
+      #trade-panel .tp-ratio { font-size: 12px; margin: 0; letter-spacing: 1px; }
       #trade-panel .tp-btn-settle { font-size: 9px; padding: 2px 7px; }
       #trade-panel .tp-pos-count { font-size: 15px !important; margin: 0 2px !important; }
       #trade-panel .tp-pos-title { font-size: 10px !important; }
@@ -744,12 +744,12 @@
         <span class="tp-val" id="unrealized-pnl">0円</span>
       </div>
       <div id="pnl-detail" style="display: none; font-size: 11px; margin: -4px 0 10px 0; padding-left: 4px; border-left: 2px solid var(--border); flex-direction: column; gap: 2px;">
-        <div style="display: flex; justify-content: space-between; color: var(--down); white-space: nowrap;">
-          <span>売損:</span>
+        <div id="unpnl-sell-row" style="display: flex; justify-content: space-between; white-space: nowrap;">
+          <span id="unpnl-sell-lbl">売損:</span>
           <span id="unpnl-sell">0円</span>
         </div>
-        <div style="display: flex; justify-content: space-between; color: var(--up); white-space: nowrap;">
-          <span>買損:</span>
+        <div id="unpnl-buy-row" style="display: flex; justify-content: space-between; white-space: nowrap;">
+          <span id="unpnl-buy-lbl">買損:</span>
           <span id="unpnl-buy">0円</span>
         </div>
       </div>
@@ -759,7 +759,6 @@
       </div>
       <div class="tp-actions">
         <button class="tp-btn" onclick="showHistory()">🕒 取引履歴</button>
-        <button class="tp-btn" onclick="resetTrade()">🗑 リセット</button>
       </div>
     </div>
 
@@ -769,7 +768,7 @@
       <div class="tp-pos-grid">
         <!-- 売り: タイトル + ▲数字▼ を横並び -->
         <div class="tp-pos-col" style="flex-direction: row; align-items: center; gap: 4px; width: auto;">
-          <div class="tp-pos-title down-color" style="margin-bottom: 0;">売り</div>
+          <div class="tp-pos-title down-color" style="margin-bottom: 0;">売</div>
           <button class="tp-arrow" onclick="changePos('sell', 1)" style="width: 28px; height: 28px;">▲</button>
           <div class="tp-pos-count down-color" id="pos-sell" style="font-size: 18px; margin: 0 2px;">0</div>
           <button class="tp-arrow" onclick="changePos('sell', -1)" style="width: 28px; height: 28px;">▼</button>
@@ -786,7 +785,7 @@
           <button class="tp-arrow" onclick="changePos('buy', -1)" style="width: 28px; height: 28px;">▼</button>
           <div class="tp-pos-count up-color" id="pos-buy" style="font-size: 18px; margin: 0 2px;">0</div>
           <button class="tp-arrow" onclick="changePos('buy', 1)" style="width: 28px; height: 28px;">▲</button>
-          <div class="tp-pos-title up-color" style="margin-bottom: 0;">買い</div>
+          <div class="tp-pos-title up-color" style="margin-bottom: 0;">買</div>
           <div style="font-size: 9px; color: var(--dim); display: none;" id="avg-buy-price">avg: -</div>
         </div>
       </div>
@@ -1733,14 +1732,14 @@ function changePos(type, delta) {
       const newTotal = tPosSell + delta;
       tAvgSellPrice = ((tAvgSellPrice * tPosSell) + (price * delta)) / newTotal;
       tPosSell = newTotal;
-      addHistory(c.time, '売り追加', delta * unit, price, 0);
+      addHistory(c.time, '売追加', delta * unit, price, 0);
       setCandleColor(cursor, 'sell_entry');
     } else if (delta < 0 && tPosSell > 0) {
       const closeQty = Math.min(Math.abs(delta), tPosSell);
       tPosSell -= closeQty;
       const pnl = (tAvgSellPrice - price) * closeQty * unit;
       tRealizedPnL += pnl;
-      addHistory(c.time, '売り決済', closeQty * unit, price, pnl);
+      addHistory(c.time, '売決済', closeQty * unit, price, pnl);
       if (tPosSell === 0) tAvgSellPrice = 0;
       setCandleColor(cursor, 'sell_close');
     }
@@ -1749,14 +1748,14 @@ function changePos(type, delta) {
       const newTotal = tPosBuy + delta;
       tAvgBuyPrice = ((tAvgBuyPrice * tPosBuy) + (price * delta)) / newTotal;
       tPosBuy = newTotal;
-      addHistory(c.time, '買い追加', delta * unit, price, 0);
+      addHistory(c.time, '買追加', delta * unit, price, 0);
       setCandleColor(cursor, 'buy_entry');
     } else if (delta < 0 && tPosBuy > 0) {
       const closeQty = Math.min(Math.abs(delta), tPosBuy);
       tPosBuy -= closeQty;
       const pnl = (price - tAvgBuyPrice) * closeQty * unit;
       tRealizedPnL += pnl;
-      addHistory(c.time, '買い決済', closeQty * unit, price, pnl);
+      addHistory(c.time, '買決済', closeQty * unit, price, pnl);
       if (tPosBuy === 0) tAvgBuyPrice = 0;
       setCandleColor(cursor, 'buy_close');
     }
@@ -1775,12 +1774,12 @@ function settleAll() {
   if (tPosSell > 0) {
     const pnl = (tAvgSellPrice - price) * tPosSell * unit;
     totalPnl += pnl;
-    addHistory(c.time, '売り決済(区切)', tPosSell * unit, price, pnl);
+    addHistory(c.time, '売決済(区切)', tPosSell * unit, price, pnl);
   }
   if (tPosBuy > 0) {
     const pnl = (price - tAvgBuyPrice) * tPosBuy * unit;
     totalPnl += pnl;
-    addHistory(c.time, '買い決済(区切)', tPosBuy * unit, price, pnl);
+    addHistory(c.time, '買決済(区切)', tPosBuy * unit, price, pnl);
   }
   
   setCandleColor(cursor, 'settle_all');
@@ -1830,8 +1829,12 @@ function updateTradePanel(currentPrice) {
   const elDetail = document.getElementById('pnl-detail');
   if (tPosSell > 0 && tPosBuy > 0) {
     elDetail.style.display = 'flex';
+    document.getElementById('unpnl-sell-lbl').textContent = unPnlSell >= 0 ? '売益:' : '売損:';
     document.getElementById('unpnl-sell').textContent = Math.round(unPnlSell).toLocaleString() + '円';
+    document.getElementById('unpnl-sell-row').style.color = unPnlSell > 0 ? 'var(--up)' : (unPnlSell < 0 ? 'var(--down)' : 'inherit');
+    document.getElementById('unpnl-buy-lbl').textContent = unPnlBuy >= 0 ? '買益:' : '買損:';
     document.getElementById('unpnl-buy').textContent = Math.round(unPnlBuy).toLocaleString() + '円';
+    document.getElementById('unpnl-buy-row').style.color = unPnlBuy > 0 ? 'var(--up)' : (unPnlBuy < 0 ? 'var(--down)' : 'inherit');
   } else {
     elDetail.style.display = 'none';
   }
@@ -1865,10 +1868,6 @@ function resetTradeState() {
   updateTradePanel();
 }
 
-function resetTrade() {
-  if (!confirm('取引履歴と現在のポジションをすべてリセットしますか？')) return;
-  resetTradeState();
-}
 
 function showHistory() {
   const tbody = document.getElementById('hist-tbody');
