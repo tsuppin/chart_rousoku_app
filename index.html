@@ -400,7 +400,6 @@
     }
     .wbtn.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-    #bar-info { margin-left: auto; font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--dim); }
     #key-hint { font-size: 10px; color: var(--dim); margin-left: 6px; white-space: nowrap; }
 
     /* 自動めくり */
@@ -553,7 +552,6 @@
       #btn-auto { min-height: 40px; padding: 8px 10px; font-size: 13px; }
       .spd-btn { padding: 6px 8px; font-size: 11px; min-height: 36px; }
       .wbtn { padding: 6px 8px; font-size: 11px; min-height: 36px; }
-      #bar-info { font-size: 10px; margin-left: auto; }
       #key-hint { display: none; } /* スマホではキーヒント非表示 */
       #win-sel { gap: 3px; flex-shrink: 0; }
       #auto-area { gap: 3px; flex: 1; }
@@ -837,7 +835,6 @@
     </div>
 
     <div id="date-badge">----/--/--</div>
-    <div id="bar-info">--/-- バー</div>
   </div>
 
   <div id="key-hint">← →: 移動　Space: 自動　＋ー: ズーム　0: フィット</div>
@@ -1499,8 +1496,6 @@ function showBarInfo(idx) {
 
   displayOHLC(c);
   document.getElementById('date-badge').textContent = toYYMMDD(c.time);
-  document.getElementById('bar-info').textContent   =
-    `${(idx + 1).toLocaleString()} / ${allCandles.length.toLocaleString()} バー`;
 
   // MA凡例の値更新（二分探索でcursor時点の値を探す）
   for (const d of MA_DEFS) {
