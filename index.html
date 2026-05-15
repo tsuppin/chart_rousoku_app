@@ -776,8 +776,7 @@
         </div>
         
         <div class="tp-pos-center">
-          <div class="tp-ratio" id="pos-ratio">0 - 0</div>
-          <button class="tp-btn-settle" onclick="settleAll()">🔄 区切る</button>
+          <button class="tp-btn-settle" onclick="settleAll()">区切</button>
         </div>
 
         <!-- 買い: タイトル + ▲数字▼ を横並び -->
@@ -1795,7 +1794,7 @@ function settleAll() {
 function updateTradePanel(currentPrice) {
   document.getElementById('pos-sell').textContent = tPosSell;
   document.getElementById('pos-buy').textContent = tPosBuy;
-  document.getElementById('pos-ratio').textContent = `${tPosSell} - ${tPosBuy}`;
+
   
   document.getElementById('avg-sell-price').textContent = tPosSell > 0 ? `avg: ${Math.round(tAvgSellPrice).toLocaleString()}` : 'avg: -';
   document.getElementById('avg-buy-price').textContent = tPosBuy > 0 ? `avg: ${Math.round(tAvgBuyPrice).toLocaleString()}` : 'avg: -';
