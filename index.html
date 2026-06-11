@@ -922,6 +922,19 @@ function toYYMMDD(t) {
    定数・設定
 ====================================================== */
 const STOCK_INFO = {
+  // ── 指数・為替・コモディティ・暗号資産 ──────────────────────────
+  'INDEX_N225':  {'name': '日経225'},
+  'INDEX_TOPX':  {'name': 'TOPIX ETF'},
+  'INDEX_DJI':   {'name': 'NYダウ'},
+  'INDEX_IXIC':  {'name': 'ナスダック'},
+  'INDEX_GSPC':  {'name': 'S&P500'},
+  'INDEX_WTI':   {'name': 'WTI原油'},
+  'INDEX_GOLD':  {'name': '金(ゴールド)'},
+  'INDEX_USDJPY':{'name': '米ドル/円'},
+  'INDEX_EURJPY':{'name': 'ユーロ/円'},
+  'INDEX_BTC':   {'name': 'ビットコイン'},
+  'INDEX_ETH':   {'name': 'イーサリアム'},
+  // ── 個別銘柄 ───────────────────────────────────────────
   '1332':{'name':'マルハニチロ'},      '1333':{'name':'ニッスイ'},
   '1605':{'name':'INPEX'},             '1801':{'name':'大成建設'},
   '1802':{'name':'大林組'},            '1803':{'name':'清水建設'},
@@ -1256,7 +1269,9 @@ async function loadData(code) {
     script.src = `data/${code}.js`;
     
     script.onload = () => {
-      const json = window[`STOCK_DATA_${code}`];
+      // INDEX_ プレフィックスの場合はJS変数名のハイフン等を変換
+      const varName = code.replace(/-/g, '_').replace(/=/g, '_').replace(/\^/g, '');
+      const json = window[`STOCK_DATA_${varName}`];
       if (!json) {
         reject(new Error('データ形式が不正です'));
         return;

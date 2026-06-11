@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 株価データ取得スクリプト
-yfinance を使用して 日経225銘柄の日足データを JSON に保存します。
+yfinance を使用して 日経225銘柄 + 各種インデックス・為替・コモディティ・暗号資産の
+日足データを JSON に保存します。
 
 使用方法:
   pip install yfinance
@@ -238,6 +239,24 @@ STOCKS = {
     "9684": {"name": "スクウェア・エニックスHD","ticker": "9684.T"},
 }
 
+# ============================================================
+# インデックス・為替・コモディティ・暗号資産
+# ============================================================
+INDICES = {
+    # キー = ファイルコード（INDEX_ プレフィックスでHTMLと対応）
+    "INDEX_N225":   {"name": "日経225",          "ticker": "^N225"},
+    "INDEX_TOPX":   {"name": "TOPIX ETF",       "ticker": "1306.T"},
+    "INDEX_DJI":    {"name": "NYダウ",           "ticker": "^DJI"},
+    "INDEX_IXIC":   {"name": "ナスダック",       "ticker": "^IXIC"},
+    "INDEX_GSPC":   {"name": "S&P500",           "ticker": "^GSPC"},
+    "INDEX_WTI":    {"name": "WTI原油",          "ticker": "CL=F"},
+    "INDEX_GOLD":   {"name": "金（ゴールド）",   "ticker": "GC=F"},
+    "INDEX_USDJPY": {"name": "米ドル/円",        "ticker": "JPY=X"},
+    "INDEX_EURJPY": {"name": "ユーロ/円",        "ticker": "EURJPY=X"},
+    "INDEX_BTC":    {"name": "ビットコイン",     "ticker": "BTC-USD"},
+    "INDEX_ETH":    {"name": "イーサリアム",     "ticker": "ETH-USD"},
+}
+
 YEARS      = 5           # データ期間（225銘柄でもVercel制限内に収まるよう5年）
 OUTPUT_DIR = "data"
 
@@ -245,23 +264,13 @@ OUTPUT_DIR = "data"
 # ============================================================
 # メイン処理
 # ============================================================
-def fetch_all():
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-    end_dt   = datetime.now()
-    start_dt = end_dt - timedelta(days=int(365.25 * YEARS))
-
-    start_str = start_dt.strftime("%Y-%m-%d")
-    end_str   = end_dt.strftime("%Y-%m-%d")
-
-    total = len(STOCKS)
-    print(f"\n[INFO] 株価データ取得開始: {start_str} ~ {end_str}")
-    print(f"[INFO] 対象銘柄数: {total} 銘柄\n")
-
+def fetch_items(items_dict, start_str, end_str, label="銘柄"):
+    """汎用データ取得関数。STOCKS / INDICES どちらにも使用。"""
+    total = len(items_dict)
     success_count = 0
-    fail_codes    = []
+    fail_codes = []
 
-    for i, (code, info) in enumerate(STOCKS.items(), 1):
+    for i, (code, info) in enumerate(items_dict.items(), 1):
         ticker_str = info["ticker"]
         print(f"  [{i:3d}/{total}] {code} {info['name']} ({ticker_str}) ...", end=" ")
 
@@ -291,20 +300,24 @@ def fetch_all():
                 h = float(row["High"])
                 l = float(row["Low"])
                 c = float(row["Close"])
-                v = int(row["Volume"])
+                v = int(row.get("Volume", 0))
             except (TypeError, ValueError, KeyError):
                 continue
 
             if any(x != x for x in [o, h, l, c]):
                 continue
 
+            # 小数点以下の桁数をデータ種別に応じて調整
+            is_index_or_fx = code.startswith("INDEX_")
+            decimals = 2 if is_index_or_fx else 1
+
             date_str = str(date_idx)[:10]
             candles.append({
                 "time":   date_str,
-                "open":   round(o, 1),
-                "high":   round(h, 1),
-                "low":    round(l, 1),
-                "close":  round(c, 1),
+                "open":   round(o, decimals),
+                "high":   round(h, decimals),
+                "low":    round(l, decimals),
+                "close":  round(c, decimals),
                 "volume": v,
             })
 
@@ -322,23 +335,52 @@ def fetch_all():
             "candles":    candles,
         }
 
+        # ファイル名は code をそのまま使用（INDEX_N225.js など）
+        safe_code = code.replace("/", "_").replace("=", "_").replace("^", "")
         out_path = os.path.join(OUTPUT_DIR, f"{code}.js")
         with open(out_path, "w", encoding="utf-8") as f:
-            f.write(f"window.STOCK_DATA_{code} = ")
+            # JS変数名はアンダースコア等で安全に
+            var_name = code.replace("-", "_").replace("=", "_").replace("^", "")
+            f.write(f"window.STOCK_DATA_{var_name} = ")
             json.dump(output, f, ensure_ascii=False, indent=2)
             f.write(";")
 
         print(f"OK ({len(candles):,} 件)")
         success_count += 1
 
-        # レート制限対策: 5銘柄ごとに少し待つ
+        # レート制限対策: 5件ごとに少し待つ
         if i % 5 == 0:
             time.sleep(1)
 
+    return success_count, fail_codes
+
+
+def fetch_all():
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    end_dt   = datetime.now()
+    start_dt = end_dt - timedelta(days=int(365.25 * YEARS))
+
+    start_str = start_dt.strftime("%Y-%m-%d")
+    end_str   = end_dt.strftime("%Y-%m-%d")
+
+    print(f"\n[INFO] データ取得開始: {start_str} ~ {end_str}")
+
+    # ── 1. インデックス・為替・コモディティ・暗号資産 ──────────────────
+    print(f"\n[STEP 1] インデックス等 ({len(INDICES)} 件)")
+    ok1, fail1 = fetch_items(INDICES, start_str, end_str, label="インデックス")
+
+    # ── 2. 個別銘柄 ────────────────────────────────────────────────────
+    print(f"\n[STEP 2] 個別銘柄 ({len(STOCKS)} 銘柄)")
+    ok2, fail2 = fetch_items(STOCKS, start_str, end_str, label="銘柄")
+
+    # ── 完了サマリー ───────────────────────────────────────────────────
+    total_ok   = ok1 + ok2
+    total_fail = fail1 + fail2
     print()
-    print(f"[DONE] 成功: {success_count} 銘柄  失敗: {len(fail_codes)} 銘柄")
-    if fail_codes:
-        print(f"[FAIL] 失敗銘柄: {', '.join(fail_codes)}")
+    print(f"[DONE] 成功: {total_ok} 件  失敗: {len(total_fail)} 件")
+    if total_fail:
+        print(f"[FAIL] 失敗: {', '.join(total_fail)}")
     print("\n次のコマンドでサーバーを起動してください:")
     print("  python start_server.py")
     print("ブラウザで  http://localhost:8080  を開いてください\n")
