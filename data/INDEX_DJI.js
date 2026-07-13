@@ -2,7 +2,7 @@ window.STOCK_DATA_INDEX_DJI = {
   "code": "INDEX_DJI",
   "name": "NYダウ",
   "ticker": "^DJI",
-  "fetched_at": "2026-07-13T12:20:49.260106",
+  "fetched_at": "2026-07-13T12:27:23.089246",
   "count": 1254,
   "candles": [
     {

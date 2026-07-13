@@ -2,7 +2,7 @@ window.STOCK_DATA_INDEX_WTI = {
   "code": "INDEX_WTI",
   "name": "WTI原油",
   "ticker": "CL=F",
-  "fetched_at": "2026-07-13T12:20:50.032171",
+  "fetched_at": "2026-07-13T12:27:24.364120",
   "count": 1257,
   "candles": [
     {
@@ -10058,8 +10058,8 @@ window.STOCK_DATA_INDEX_WTI = {
       "open": 73.69,
       "high": 74.66,
       "low": 73.18,
-      "close": 74.39,
-      "volume": 26821
+      "close": 74.41,
+      "volume": 27081
     }
   ]
 };

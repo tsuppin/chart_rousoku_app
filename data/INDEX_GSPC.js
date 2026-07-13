@@ -2,7 +2,7 @@ window.STOCK_DATA_INDEX_GSPC = {
   "code": "INDEX_GSPC",
   "name": "S&P500",
   "ticker": "^GSPC",
-  "fetched_at": "2026-07-13T12:20:49.737561",
+  "fetched_at": "2026-07-13T12:27:23.926272",
   "count": 1254,
   "candles": [
     {

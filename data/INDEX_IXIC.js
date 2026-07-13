@@ -2,7 +2,7 @@ window.STOCK_DATA_INDEX_IXIC = {
   "code": "INDEX_IXIC",
   "name": "ナスダック",
   "ticker": "^IXIC",
-  "fetched_at": "2026-07-13T12:20:49.540160",
+  "fetched_at": "2026-07-13T12:27:23.508086",
   "count": 1254,
   "candles": [
     {

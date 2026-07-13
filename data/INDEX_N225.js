@@ -2,7 +2,7 @@ window.STOCK_DATA_INDEX_N225 = {
   "code": "INDEX_N225",
   "name": "日経225",
   "ticker": "^N225",
-  "fetched_at": "2026-07-13T12:20:48.541776",
+  "fetched_at": "2026-07-13T12:27:22.235800",
   "count": 1221,
   "candles": [
     {

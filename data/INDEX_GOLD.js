@@ -2,7 +2,7 @@ window.STOCK_DATA_INDEX_GOLD = {
   "code": "INDEX_GOLD",
   "name": "金(ゴールド)",
   "ticker": "GC=F",
-  "fetched_at": "2026-07-13T12:20:50.304516",
+  "fetched_at": "2026-07-13T12:27:24.723215",
   "count": 1257,
   "candles": [
     {
@@ -10057,9 +10057,9 @@ window.STOCK_DATA_INDEX_GOLD = {
       "time": "2026-07-12",
       "open": 4106.6,
       "high": 4111.6,
-      "low": 4066.3,
-      "close": 4068.1,
-      "volume": 22400
+      "low": 4060.7,
+      "close": 4066.8,
+      "volume": 23402
     }
   ]
 };

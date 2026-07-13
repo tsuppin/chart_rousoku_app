@@ -2,7 +2,7 @@ window.STOCK_DATA_INDEX_USDJPY = {
   "code": "INDEX_USDJPY",
   "name": "米ドル/円",
   "ticker": "JPY=X",
-  "fetched_at": "2026-07-13T12:20:50.592567",
+  "fetched_at": "2026-07-13T12:27:26.049153",
   "count": 1299,
   "candles": [
     {

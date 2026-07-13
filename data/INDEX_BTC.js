@@ -2,7 +2,7 @@ window.STOCK_DATA_INDEX_BTC = {
   "code": "INDEX_BTC",
   "name": "ビットコイン",
   "ticker": "BTC-USD",
-  "fetched_at": "2026-07-13T12:20:51.385266",
+  "fetched_at": "2026-07-13T12:27:26.671516",
   "count": 1825,
   "candles": [
     {

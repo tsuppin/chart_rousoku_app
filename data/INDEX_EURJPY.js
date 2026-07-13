@@ -2,7 +2,7 @@ window.STOCK_DATA_INDEX_EURJPY = {
   "code": "INDEX_EURJPY",
   "name": "ユーロ/円",
   "ticker": "EURJPY=X",
-  "fetched_at": "2026-07-13T12:20:50.876771",
+  "fetched_at": "2026-07-13T12:27:26.353313",
   "count": 1299,
   "candles": [
     {

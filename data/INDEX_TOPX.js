@@ -2,7 +2,7 @@ window.STOCK_DATA_INDEX_TOPX = {
   "code": "INDEX_TOPX",
   "name": "TOPIX ETF",
   "ticker": "1306.T",
-  "fetched_at": "2026-07-13T12:20:48.826402",
+  "fetched_at": "2026-07-13T12:27:22.689404",
   "count": 1221,
   "candles": [
     {
