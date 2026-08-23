@@ -1210,14 +1210,19 @@ function getMonday(dateStr) {
   return new Date(d.setDate(diff)).toISOString().slice(0, 10);
 }
 
-/** 指定カーソル時点までの週足データを生成 */
+/** 指定カーソル時点までの週足データを生成（確定済みの週のみ） */
 function calcWeeklyData(dailyCandles, endIdx) {
   const weekly = [];
   let currentW = null;
+  // カーソル位置の日が属する週の月曜日を取得
+  const cursorMonday = getMonday(dailyCandles[endIdx].time);
 
   for (let i = 0; i <= endIdx; i++) {
     const d = dailyCandles[i];
     const monday = getMonday(d.time);
+
+    // カーソルと同じ週のデータは含めない（進行中の週）
+    if (monday === cursorMonday) continue;
 
     if (!currentW || currentW.time !== monday) {
       if (currentW) weekly.push(currentW);
@@ -1233,16 +1238,21 @@ function calcWeeklyData(dailyCandles, endIdx) {
   return weekly;
 }
 
-/** 指定カーソル時点までの月足データを生成 */
+/** 指定カーソル時点までの月足データを生成（確定済みの月のみ） */
 function calcMonthlyData(dailyCandles, endIdx) {
   const monthly = [];
   let currentM = null;
+  // カーソル位置の日が属する月のキーを取得
+  const cursorMonthKey = toDateStr(dailyCandles[endIdx].time).slice(0, 7) + '-01';
 
   for (let i = 0; i <= endIdx; i++) {
     const d = dailyCandles[i];
     const dateStr = toDateStr(d.time);
     // 月初日 (YYYY-MM-01) をキーにする
     const monthKey = dateStr.slice(0, 7) + '-01';
+
+    // カーソルと同じ月のデータは含めない（進行中の月）
+    if (monthKey === cursorMonthKey) continue;
 
     if (!currentM || currentM.time !== monthKey) {
       if (currentM) monthly.push(currentM);
