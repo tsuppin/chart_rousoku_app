@@ -206,6 +206,10 @@
       flex: 1;
       border-top: 1px solid var(--border);
     }
+    #chart-monthly {
+      flex: 1;
+      border-top: 1px solid var(--border);
+    }
     /* チャートタイトルラベル */
     .chart-label {
       position: absolute;
@@ -732,6 +736,10 @@
       <div class="chart-label">週足</div>
     </div>
     
+    <div id="chart-monthly" class="chart-container">
+      <div class="chart-label">月足</div>
+    </div>
+    
     <div id="swipe-hint">← 左スワイプ：前日　右スワイプ：次日 →</div>
   </div>
 
@@ -1049,12 +1057,16 @@ const MA_DEFS = [
 ====================================================== */
 let chart        = null;   // 日足チャート
 let chartW       = null;   // 週足チャート
+let chartM       = null;   // 月足チャート
 let candleSeries = null;   // 日足ローソク
 let candleSeriesW = null;  // 週足ローソク
+let candleSeriesM = null;  // 月足ローソク
 let closeSeries  = null;   // 日足終値ライン
 let closeSeriesW = null;   // 週足終値ライン
+let closeSeriesM = null;   // 月足終値ライン
 const maSeries   = {};     // 日足MA { period: series }
 const maSeriesW  = {};     // 週足MA { period: series }
+const maSeriesM  = {};     // 月足MA { period: series }
 const maVisible  = {};     // { period: bool }
 
 let allCandles = [];       // 全ローソクデータ配列
@@ -1113,7 +1125,7 @@ function initChart() {
   chart = LightweightCharts.createChart(document.getElementById('chart-daily'), {
     ...chartOptions,
     width: wrap.clientWidth,
-    height: wrap.clientHeight * 0.55,
+    height: wrap.clientHeight * 0.40,
   });
 
   candleSeries = chart.addCandlestickSeries({
@@ -1127,7 +1139,7 @@ function initChart() {
   chartW = LightweightCharts.createChart(document.getElementById('chart-weekly'), {
     ...chartOptions,
     width: wrap.clientWidth,
-    height: wrap.clientHeight * 0.45,
+    height: wrap.clientHeight * 0.30,
   });
 
   candleSeriesW = chartW.addCandlestickSeries({
@@ -1137,7 +1149,21 @@ function initChart() {
 
   closeSeriesW = chartW.addLineSeries({ color: '#9e9e9e', lineWidth: 1, priceLineVisible: false, visible: false });
 
-  // --- MAシリーズ作成 (日足・週足共通) ---
+  // --- 月足チャート ---
+  chartM = LightweightCharts.createChart(document.getElementById('chart-monthly'), {
+    ...chartOptions,
+    width: wrap.clientWidth,
+    height: wrap.clientHeight * 0.30,
+  });
+
+  candleSeriesM = chartM.addCandlestickSeries({
+    upColor: '#f23645', downColor: '#26a69a', borderUpColor: '#f23645', borderDownColor: '#26a69a',
+    wickUpColor: '#f23645', wickDownColor: '#26a69a', priceLineVisible: false,
+  });
+
+  closeSeriesM = chartM.addLineSeries({ color: '#9e9e9e', lineWidth: 1, priceLineVisible: false, visible: false });
+
+  // --- MAシリーズ作成 (日足・週足・月足共通) ---
   for (const d of MA_DEFS) {
     const opts = {
       color: d.color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false,
@@ -1145,6 +1171,7 @@ function initChart() {
     };
     maSeries[d.p] = chart.addLineSeries(opts);
     maSeriesW[d.p] = chartW.addLineSeries(opts);
+    maSeriesM[d.p] = chartM.addLineSeries(opts);
     
     if (!maVisible[d.p]) {
       const el = document.getElementById(`mae-${d.p}`);
@@ -1155,19 +1182,21 @@ function initChart() {
   /* クロスヘア連動 */
   chart.subscribeCrosshairMove(param => {
     onCrosshair(param, 'daily');
-    chartW.setCrosshairPosition(param.paneViews ? param.time : undefined, undefined, candleSeriesW);
   });
   chartW.subscribeCrosshairMove(param => {
     onCrosshair(param, 'weekly');
-    chart.setCrosshairPosition(param.paneViews ? param.time : undefined, undefined, candleSeries);
+  });
+  chartM.subscribeCrosshairMove(param => {
+    onCrosshair(param, 'monthly');
   });
 
   /* リサイズ対応 */
   const ro = new ResizeObserver(() => {
     const w = wrap.clientWidth;
     const h = wrap.clientHeight;
-    chart.resize(w, h * 0.55);
-    chartW.resize(w, h * 0.45);
+    chart.resize(w, h * 0.40);
+    chartW.resize(w, h * 0.30);
+    chartM.resize(w, h * 0.30);
   });
   ro.observe(wrap);
 }
@@ -1204,6 +1233,31 @@ function calcWeeklyData(dailyCandles, endIdx) {
   return weekly;
 }
 
+/** 指定カーソル時点までの月足データを生成 */
+function calcMonthlyData(dailyCandles, endIdx) {
+  const monthly = [];
+  let currentM = null;
+
+  for (let i = 0; i <= endIdx; i++) {
+    const d = dailyCandles[i];
+    const dateStr = toDateStr(d.time);
+    // 月初日 (YYYY-MM-01) をキーにする
+    const monthKey = dateStr.slice(0, 7) + '-01';
+
+    if (!currentM || currentM.time !== monthKey) {
+      if (currentM) monthly.push(currentM);
+      currentM = { time: monthKey, open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume };
+    } else {
+      currentM.high = Math.max(currentM.high, d.high);
+      currentM.low = Math.min(currentM.low, d.low);
+      currentM.close = d.close;
+      currentM.volume += d.volume;
+    }
+  }
+  if (currentM) monthly.push(currentM);
+  return monthly;
+}
+
 /* ======================================================
    クロスヘア: ツールチップ更新
 ====================================================== */
@@ -1213,7 +1267,7 @@ function onCrosshair(param, source) {
     return;
   }
   
-  const targetSeries = source === 'daily' ? candleSeries : candleSeriesW;
+  const targetSeries = source === 'daily' ? candleSeries : (source === 'weekly' ? candleSeriesW : candleSeriesM);
   const cd = param.seriesData.get(targetSeries);
   
   if (cd && source === 'daily') {
@@ -1222,7 +1276,7 @@ function onCrosshair(param, source) {
     if (idx >= 0) displayOHLC(allCandles[idx]);
   }
 
-  const targetMAs = source === 'daily' ? maSeries : maSeriesW;
+  const targetMAs = source === 'daily' ? maSeries : (source === 'weekly' ? maSeriesW : maSeriesM);
   for (const d of MA_DEFS) {
     const mv = param.seriesData.get(targetMAs[d.p]);
     setMAText(d.p, mv ? mv.value : null);
@@ -1363,6 +1417,17 @@ function refreshChart() {
     const wMA = calcMA(weekly, d.p);
     maSeriesW[d.p].setData(wMA);
   }
+
+  // 月足計算 & セット
+  const monthly = calcMonthlyData(allCandles, cursor);
+  candleSeriesM.setData(monthly);
+  closeSeriesM.setData(monthly.map(c => ({ time: c.time, value: c.close })));
+
+  // 月足MA (その場計算)
+  for (const d of MA_DEFS) {
+    const mMA = calcMA(monthly, d.p);
+    maSeriesM[d.p].setData(mMA);
+  }
   // ※ ここで updateVisibleRange() を呼ばないことでズームを保持
 }
 
@@ -1395,12 +1460,14 @@ function updateVisibleRange() {
     
     chart.timeScale().applyOptions(timeOptions);
     chartW.timeScale().applyOptions(timeOptions);
+    chartM.timeScale().applyOptions(timeOptions);
     
     chart.timeScale().setVisibleRange(range);
 
-    // スクロール同期（週足の右端を合わせる）
+    // スクロール同期（週足・月足の右端を合わせる）
     setTimeout(() => {
       chartW.timeScale().scrollToPosition(0, false);
+      chartM.timeScale().scrollToPosition(0, false);
     }, 0);
 
   } catch (_) { }
@@ -1411,6 +1478,7 @@ function scrollKeepZoom() {
   try { 
     chart.timeScale().scrollToRealTime(); 
     chartW.timeScale().scrollToRealTime(); 
+    chartM.timeScale().scrollToRealTime(); 
   } catch (_) {}
 }
 
@@ -1464,6 +1532,7 @@ function zoomIn() {
   const options = { barSpacing: currentBarSpacing };
   chart.timeScale().applyOptions(options);
   chartW.timeScale().applyOptions(options);
+  chartM.timeScale().applyOptions(options);
   scrollKeepZoom();
 }
  
@@ -1472,6 +1541,7 @@ function zoomOut() {
   const options = { barSpacing: currentBarSpacing };
   chart.timeScale().applyOptions(options);
   chartW.timeScale().applyOptions(options);
+  chartM.timeScale().applyOptions(options);
   scrollKeepZoom();
 }
 
@@ -1544,6 +1614,7 @@ function toggleMA(period) {
   maVisible[period] = !maVisible[period];
   maSeries[period].applyOptions({ visible: maVisible[period] });
   maSeriesW[period].applyOptions({ visible: maVisible[period] });
+  maSeriesM[period].applyOptions({ visible: maVisible[period] });
   document.getElementById(`mae-${period}`).classList.toggle('off', !maVisible[period]);
 }
 
@@ -1552,6 +1623,7 @@ function toggleCandle() {
   candleVisible = !candleVisible;
   candleSeries.applyOptions({ visible: candleVisible });
   candleSeriesW.applyOptions({ visible: candleVisible });
+  candleSeriesM.applyOptions({ visible: candleVisible });
   document.getElementById('tog-candle').classList.toggle('off', !candleVisible);
 }
 
@@ -1560,6 +1632,7 @@ function toggleClose() {
   closeVisible = !closeVisible;
   closeSeries.applyOptions({ visible: closeVisible });
   closeSeriesW.applyOptions({ visible: closeVisible });
+  closeSeriesM.applyOptions({ visible: closeVisible });
   document.getElementById('tog-close').classList.toggle('off', !closeVisible);
 }
 
