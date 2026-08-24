@@ -1310,12 +1310,11 @@ function calcMA(candles, period) {
   for (let i = 0; i < candles.length; i++) {
     sum += candles[i].close;
     if (i >= period) sum -= candles[i - period].close;
-    if (i >= period - 1) {
-      out.push({
-        time:  candles[i].time,
-        value: Math.round(sum / period * 10) / 10,
-      });
-    }
+    const count = Math.min(i + 1, period);
+    out.push({
+      time:  candles[i].time,
+      value: Math.round(sum / count * 10) / 10,
+    });
   }
   return out;
 }
@@ -1413,8 +1412,7 @@ function refreshChart() {
 
   // 日足MA
   for (const d of MA_DEFS) {
-    const maEnd = Math.max(0, cursor - d.p + 2);
-    maSeries[d.p].setData(allMAs[d.p].slice(0, maEnd));
+    maSeries[d.p].setData(allMAs[d.p].slice(0, cursor + 1));
   }
 
   // 週足計算 & セット
@@ -1592,14 +1590,12 @@ function showBarInfo(idx) {
   displayOHLC(c);
   document.getElementById('date-badge').textContent = toYYMMDD(c.time);
 
-  // MA凡例の値更新（二分探索でcursor時点の値を探す）
+  // MA凡例の値更新
   for (const d of MA_DEFS) {
     const arr   = allMAs[d.p];
     if (!arr || !arr.length) { setMAText(d.p, null); continue; }
-    // cursor 時点の MA インデックス
-    const maIdx = idx - d.p + 1;
-    if (maIdx >= 0 && maIdx < arr.length) {
-      setMAText(d.p, arr[maIdx].value);
+    if (idx >= 0 && idx < arr.length) {
+      setMAText(d.p, arr[idx].value);
     } else {
       setMAText(d.p, null);
     }
