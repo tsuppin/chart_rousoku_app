@@ -1083,9 +1083,9 @@ const MAX_BAR_SPACING = 80;
 let currentCode = '1801';
 const dataCache = {};      // { code: { candles, mas, info } }
 
-// MA ON/OFF 初期値 (全て表示)
+// MA ON/OFF 初期値 (3, 7, 300は初期非表示)
 MA_DEFS.forEach(d => { 
-  maVisible[d.p] = true; 
+  maVisible[d.p] = (d.p !== 3 && d.p !== 7 && d.p !== 300); 
 });
 
 /* ======================================================
