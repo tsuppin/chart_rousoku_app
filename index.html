@@ -290,6 +290,22 @@
     }
     .tp-unit input:focus { border-color: var(--accent); }
 
+    .tp-opts { margin-top: 6px; display: flex; justify-content: center; gap: 10px; font-size: 11px; color: var(--dim); }
+    .tp-opts label { display: flex; align-items: center; gap: 4px; }
+    .tp-opts select {
+      background: var(--hover); border: 1px solid var(--border); color: var(--text);
+      padding: 2px 4px; border-radius: 4px; font-size: 11px; font-family: inherit; outline: none;
+    }
+    .tp-pending {
+      margin-top: 5px; display: flex; justify-content: center; align-items: center; gap: 6px;
+      font-size: 11px; color: #FFD54F;
+    }
+    .tp-pending button {
+      background: transparent; border: 1px solid var(--border); color: var(--dim);
+      padding: 1px 6px; font-size: 10px; border-radius: 4px; cursor: pointer;
+    }
+    .tp-pending button:hover { border-color: var(--accent); color: var(--text); }
+
     /* 履歴モーダル */
     .hist-table-wrap { max-height: 300px; overflow-y: auto; margin-top: 15px; border: 1px solid var(--border); border-radius: 6px; }
     .hist-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'Roboto Mono', monospace; }
@@ -626,6 +642,9 @@
       #trade-panel .tp-pos-count { font-size: 15px !important; margin: 0 2px !important; }
       #trade-panel .tp-pos-title { font-size: 10px !important; }
       #trade-panel .tp-arrow { height: 24px !important; width: 60px !important; font-size: 11px; }
+      #trade-panel .tp-opts { margin-top: 3px; font-size: 9px; gap: 8px; }
+      #trade-panel .tp-opts select { font-size: 10px; padding: 1px 2px; }
+      #trade-panel .tp-pending { margin-top: 2px; font-size: 9px; }
     }
   </style>
 </head>
@@ -795,6 +814,27 @@
         </div>
       </div>
 
+      <div class="tp-opts">
+        <label>約定
+          <select id="exec-mode" onchange="setExecMode(this.value)">
+            <option value="next_open">翌日寄付</option>
+            <option value="close">当日終値</option>
+          </select>
+        </label>
+        <label>返済順
+          <select id="close-order" onchange="setCloseOrder(this.value)">
+            <option value="fifo">古い順</option>
+            <option value="lifo">新しい順</option>
+            <option value="profit">利益順</option>
+            <option value="loss">損失順</option>
+          </select>
+        </label>
+      </div>
+      <div class="tp-pending" id="pending-orders" style="display: none;">
+        <span id="pending-text"></span>
+        <button onclick="cancelPending()">取消</button>
+      </div>
+
       <div class="tp-unit" style="display: none;">
         <span>×</span>
         <input type="number" id="trade-unit" value="100" step="100" min="1" oninput="updateTradePanel()">
@@ -886,7 +926,7 @@
     <div class="hist-table-wrap">
       <table class="hist-table">
         <thead>
-          <tr><th>日時</th><th>操作</th><th>数量</th><th>価格</th><th>損益</th></tr>
+          <tr><th>日時</th><th>操作</th><th>数量</th><th>建値</th><th>約定値</th><th>損益</th></tr>
         </thead>
         <tbody id="hist-tbody"></tbody>
       </table>
@@ -1489,6 +1529,7 @@ function goNext() {
   if (!allCandles.length || cursor >= allCandles.length - 1) return;
   cursor++;
   refreshChart(); // 週足連動のため一括更新
+  executePending(cursor); // 翌日寄付約定モードの注文をこのバーの始値で約定
   scrollKeepZoom();
   showBarInfo(cursor);
 }
@@ -1505,6 +1546,7 @@ function goPrev() {
 /** 最新バーへジャンプ */
 function goLatest() {
   if (!allCandles.length) return;
+  flushPendingBeforeJump(allCandles.length - 1);
   cursor = allCandles.length - 1;
   refreshChart();
   showBarInfo(cursor);
@@ -1677,7 +1719,9 @@ function applyInit() {
   let idx = allCandles.findIndex(c => c.time >= dateStr);
   if (idx < 0) idx = allCandles.length - 1;
 
-  cursor = Math.max(winSize, Math.min(idx, allCandles.length - 1));
+  const newCursor = Math.max(winSize, Math.min(idx, allCandles.length - 1));
+  flushPendingBeforeJump(newCursor);
+  cursor = newCursor;
   refreshChart();
   showBarInfo(cursor);
   closeModal();
@@ -1772,12 +1816,34 @@ document.getElementById('hist-modal').addEventListener('click', e => {
 /* ======================================================
    トレードシミュレーションロジック
 ====================================================== */
-let tPosSell = 0;
-let tPosBuy = 0;
-let tAvgSellPrice = 0;
-let tAvgBuyPrice = 0;
+// 建玉は1枚ずつ個別管理する（実際の信用取引の建玉管理に準拠）
+// lot: { price: 建値, time: 建日, unit: 株数 }
+let tLotsSell = [];
+let tLotsBuy = [];
 let tRealizedPnL = 0;
 let tHistory = [];
+// 翌日寄付約定モードの未約定注文キュー: { kind: 'sell'|'buy'|'settle', delta }
+let tPending = [];
+// 約定方式: 'next_open'（翌日寄付で約定） / 'close'（当日終値で約定）
+let tExecMode = localStorage.getItem('tExecMode') || 'next_open';
+// 返済順: 'fifo'（古い順） / 'lifo'（新しい順） / 'profit'（利益順） / 'loss'（損失順）
+let tCloseOrder = localStorage.getItem('tCloseOrder') || 'fifo';
+
+const CLOSE_ORDER_LABEL = { fifo: '古い順', lifo: '新しい順', profit: '利益順', loss: '損失順' };
+
+function getTradeUnit() {
+  return parseInt(document.getElementById('trade-unit').value) || 100;
+}
+
+/** 1枚あたりの損益（円） */
+function lotPnl(lot, side, price) {
+  return (side === 'buy' ? (price - lot.price) : (lot.price - price)) * lot.unit;
+}
+
+function avgLotPrice(lots) {
+  if (!lots.length) return 0;
+  return lots.reduce((s, l) => s + l.price, 0) / lots.length;
+}
 
 function setCandleColor(idx, actionType) {
   if (idx < 0 || idx >= allCandles.length) return;
@@ -1795,88 +1861,167 @@ function setCandleColor(idx, actionType) {
     allCandles[idx].color = color;
     allCandles[idx].wickColor = color;
     allCandles[idx].borderColor = color;
-    candleSeries.update({ ...allCandles[idx] });
+    // 描画済みのバーのみ更新（未描画のバーは refreshChart で反映される）
+    if (idx <= cursor) candleSeries.update({ ...allCandles[idx] });
   }
+}
+
+/** 返済順に従って決済する建玉を選び、配列から取り除いて返す */
+function takeLotsToClose(side, n, price) {
+  const lots = side === 'buy' ? tLotsBuy : tLotsSell;
+  const idxs = lots.map((_, i) => i);
+  switch (tCloseOrder) {
+    case 'lifo':   idxs.reverse(); break;
+    case 'profit': idxs.sort((a, b) => lotPnl(lots[b], side, price) - lotPnl(lots[a], side, price) || a - b); break;
+    case 'loss':   idxs.sort((a, b) => lotPnl(lots[a], side, price) - lotPnl(lots[b], side, price) || a - b); break;
+    default: break; // fifo: 建てた順
+  }
+  const pick = new Set(idxs.slice(0, n));
+  const closed = lots.filter((_, i) => pick.has(i));
+  const remain = lots.filter((_, i) => !pick.has(i));
+  if (side === 'buy') tLotsBuy = remain; else tLotsSell = remain;
+  return closed;
+}
+
+/** 建玉を決済して履歴に記録 */
+function closeLots(side, n, idx, price, label) {
+  if (n <= 0) return 0;
+  const closed = takeLotsToClose(side, n, price);
+  if (!closed.length) return 0;
+  const pnl = closed.reduce((s, l) => s + lotPnl(l, side, price), 0);
+  const qty = closed.reduce((s, l) => s + l.unit, 0);
+  tRealizedPnL += pnl;
+  addHistory(allCandles[idx].time, label, qty, price, pnl, avgLotPrice(closed));
+  return closed.length;
+}
+
+/** 注文を指定バー・指定価格で約定させる */
+function executeAction(action, idx, price) {
+  const c = allCandles[idx];
+  const unit = getTradeUnit();
+
+  if (action.kind === 'settle') {
+    if (!tLotsSell.length && !tLotsBuy.length) return;
+    closeLots('sell', tLotsSell.length, idx, price, '売決済(区切)');
+    closeLots('buy',  tLotsBuy.length,  idx, price, '買決済(区切)');
+    setCandleColor(idx, 'settle_all');
+    return;
+  }
+
+  const side = action.kind;
+  const lots = side === 'buy' ? tLotsBuy : tLotsSell;
+  if (action.delta > 0) {
+    for (let i = 0; i < action.delta; i++) lots.push({ price, time: c.time, unit });
+    addHistory(c.time, side === 'buy' ? '買追加' : '売追加', action.delta * unit, price, 0, null);
+    setCandleColor(idx, side === 'buy' ? 'buy_entry' : 'sell_entry');
+  } else if (action.delta < 0) {
+    const n = Math.min(Math.abs(action.delta), lots.length);
+    const label = (side === 'buy' ? '買決済' : '売決済') + `(${CLOSE_ORDER_LABEL[tCloseOrder]})`;
+    if (closeLots(side, n, idx, price, label) > 0) {
+      setCandleColor(idx, side === 'buy' ? 'buy_close' : 'sell_close');
+    }
+  }
+}
+
+/** 未約定注文を考慮した、決済可能な枚数 */
+function availableToClose(side) {
+  let n = (side === 'buy' ? tLotsBuy : tLotsSell).length;
+  for (const a of tPending) {
+    if (a.kind === 'settle') n = 0;
+    else if (a.kind === side) n = Math.max(0, n + a.delta);
+  }
+  return n;
 }
 
 function changePos(type, delta) {
   if (!allCandles.length) return;
-  const c = allCandles[cursor];
-  const price = c.close;
-  const unit = parseInt(document.getElementById('trade-unit').value) || 100;
 
-  if (type === 'sell') {
-    if (delta > 0) {
-      const newTotal = tPosSell + delta;
-      tAvgSellPrice = ((tAvgSellPrice * tPosSell) + (price * delta)) / newTotal;
-      tPosSell = newTotal;
-      addHistory(c.time, '売追加', delta * unit, price, 0);
-      setCandleColor(cursor, 'sell_entry');
-    } else if (delta < 0 && tPosSell > 0) {
-      const closeQty = Math.min(Math.abs(delta), tPosSell);
-      tPosSell -= closeQty;
-      const pnl = (tAvgSellPrice - price) * closeQty * unit;
-      tRealizedPnL += pnl;
-      addHistory(c.time, '売決済', closeQty * unit, price, pnl);
-      if (tPosSell === 0) tAvgSellPrice = 0;
-      setCandleColor(cursor, 'sell_close');
-    }
-  } else if (type === 'buy') {
-    if (delta > 0) {
-      const newTotal = tPosBuy + delta;
-      tAvgBuyPrice = ((tAvgBuyPrice * tPosBuy) + (price * delta)) / newTotal;
-      tPosBuy = newTotal;
-      addHistory(c.time, '買追加', delta * unit, price, 0);
-      setCandleColor(cursor, 'buy_entry');
-    } else if (delta < 0 && tPosBuy > 0) {
-      const closeQty = Math.min(Math.abs(delta), tPosBuy);
-      tPosBuy -= closeQty;
-      const pnl = (price - tAvgBuyPrice) * closeQty * unit;
-      tRealizedPnL += pnl;
-      addHistory(c.time, '買決済', closeQty * unit, price, pnl);
-      if (tPosBuy === 0) tAvgBuyPrice = 0;
-      setCandleColor(cursor, 'buy_close');
-    }
+  if (tExecMode === 'close') {
+    executeAction({ kind: type, delta }, cursor, allCandles[cursor].close);
+  } else {
+    if (delta < 0 && availableToClose(type) <= 0) return;
+    tPending.push({ kind: type, delta });
   }
-  updateTradePanel(price);
+  updateTradePanel();
 }
 
 function settleAll() {
   if (!allCandles.length) return;
-  if (tPosSell === 0 && tPosBuy === 0) return;
-  const c = allCandles[cursor];
-  const price = c.close;
-  const unit = parseInt(document.getElementById('trade-unit').value) || 100;
-  
-  let totalPnl = 0;
-  if (tPosSell > 0) {
-    const pnl = (tAvgSellPrice - price) * tPosSell * unit;
-    totalPnl += pnl;
-    addHistory(c.time, '売決済(区切)', tPosSell * unit, price, pnl);
+
+  if (tExecMode === 'close') {
+    if (!tLotsSell.length && !tLotsBuy.length) return;
+    executeAction({ kind: 'settle' }, cursor, allCandles[cursor].close);
+  } else {
+    if (availableToClose('sell') <= 0 && availableToClose('buy') <= 0) return;
+    tPending.push({ kind: 'settle' });
   }
-  if (tPosBuy > 0) {
-    const pnl = (price - tAvgBuyPrice) * tPosBuy * unit;
-    totalPnl += pnl;
-    addHistory(c.time, '買決済(区切)', tPosBuy * unit, price, pnl);
+  updateTradePanel();
+}
+
+/** 未約定注文を指定バーの始値（寄付）で約定させる */
+function executePending(idx) {
+  if (!tPending.length || idx < 0 || idx >= allCandles.length) return;
+  const price = allCandles[idx].open;
+  const queue = tPending;
+  tPending = [];
+  for (const a of queue) executeAction(a, idx, price);
+}
+
+/** 先の日付へジャンプする前に、翌バーの寄付で未約定注文を約定させる */
+function flushPendingBeforeJump(newCursor) {
+  if (tPending.length && newCursor > cursor && cursor + 1 < allCandles.length) {
+    executePending(cursor + 1);
   }
-  
-  setCandleColor(cursor, 'settle_all');
-  
-  tRealizedPnL += totalPnl;
-  tPosSell = 0;
-  tPosBuy = 0;
-  tAvgSellPrice = 0;
-  tAvgBuyPrice = 0;
-  updateTradePanel(price);
+}
+
+function cancelPending() {
+  tPending = [];
+  updateTradePanel();
+}
+
+function setExecMode(mode) {
+  tExecMode = mode;
+  localStorage.setItem('tExecMode', mode);
+  tPending = []; // 方式変更時は未約定注文を破棄
+  updateTradePanel();
+}
+
+function setCloseOrder(order) {
+  tCloseOrder = order;
+  localStorage.setItem('tCloseOrder', order);
+}
+
+/** 未約定注文の要約テキスト */
+function pendingSummary() {
+  const parts = [];
+  for (const a of tPending) {
+    if (a.kind === 'settle') { parts.push('区切'); continue; }
+    const s = a.kind === 'buy' ? '買' : '売';
+    parts.push(a.delta > 0 ? `${s}+${a.delta}` : `${s}決済${-a.delta}`);
+  }
+  // 連続する同種の注文をまとめる
+  const merged = [];
+  for (const p of parts) {
+    const last = merged[merged.length - 1];
+    const m = p.match(/^(買|売)(\+|決済)(\d+)$/);
+    const lm = last && last.match(/^(買|売)(\+|決済)(\d+)$/);
+    if (m && lm && m[1] === lm[1] && m[2] === lm[2]) {
+      merged[merged.length - 1] = `${m[1]}${m[2]}${parseInt(lm[3]) + parseInt(m[3])}`;
+    } else {
+      merged.push(p);
+    }
+  }
+  return merged.join(' / ');
 }
 
 function updateTradePanel(currentPrice) {
-  document.getElementById('pos-sell').textContent = tPosSell;
-  document.getElementById('pos-buy').textContent = tPosBuy;
+  document.getElementById('pos-sell').textContent = tLotsSell.length;
+  document.getElementById('pos-buy').textContent = tLotsBuy.length;
 
-  
-  document.getElementById('avg-sell-price').textContent = tPosSell > 0 ? `avg: ${Math.round(tAvgSellPrice).toLocaleString()}` : 'avg: -';
-  document.getElementById('avg-buy-price').textContent = tPosBuy > 0 ? `avg: ${Math.round(tAvgBuyPrice).toLocaleString()}` : 'avg: -';
+  const avgSell = avgLotPrice(tLotsSell);
+  const avgBuy = avgLotPrice(tLotsBuy);
+  document.getElementById('avg-sell-price').textContent = tLotsSell.length ? `avg: ${Math.round(avgSell).toLocaleString()}` : 'avg: -';
+  document.getElementById('avg-buy-price').textContent = tLotsBuy.length ? `avg: ${Math.round(avgBuy).toLocaleString()}` : 'avg: -';
   
   let unPnl = 0;
   let unPnlSell = 0;
@@ -1888,15 +2033,9 @@ function updateTradePanel(currentPrice) {
     : (allCandles.length > 0 && allCandles[cursor] ? allCandles[cursor].close : null);
 
   if (price !== null) {
-    const unit = parseInt(document.getElementById('trade-unit').value) || 100;
-    if (tPosSell > 0) {
-      unPnlSell = (tAvgSellPrice - price) * tPosSell * unit;
-      unPnl += unPnlSell;
-    }
-    if (tPosBuy > 0) {
-      unPnlBuy = (price - tAvgBuyPrice) * tPosBuy * unit;
-      unPnl += unPnlBuy;
-    }
+    unPnlSell = tLotsSell.reduce((s, l) => s + lotPnl(l, 'sell', price), 0);
+    unPnlBuy  = tLotsBuy.reduce((s, l) => s + lotPnl(l, 'buy', price), 0);
+    unPnl = unPnlSell + unPnlBuy;
   }
   
   const elUnPnl = document.getElementById('unrealized-pnl');
@@ -1905,7 +2044,7 @@ function updateTradePanel(currentPrice) {
 
   // 内訳の更新
   const elDetail = document.getElementById('pnl-detail');
-  if (tPosSell > 0 && tPosBuy > 0) {
+  if (tLotsSell.length && tLotsBuy.length) {
     elDetail.style.display = 'flex';
     document.getElementById('unpnl-sell-lbl').textContent = unPnlSell >= 0 ? '売益:' : '売損:';
     document.getElementById('unpnl-sell').textContent = Math.round(unPnlSell).toLocaleString() + '円';
@@ -1920,15 +2059,28 @@ function updateTradePanel(currentPrice) {
   const elRePnl = document.getElementById('realized-pnl');
   elRePnl.textContent = Math.round(tRealizedPnL).toLocaleString() + '円';
   elRePnl.className = 'tp-val ' + (tRealizedPnL > 0 ? 'profit' : (tRealizedPnL < 0 ? 'loss' : ''));
+
+  // 未約定注文の表示
+  const elPend = document.getElementById('pending-orders');
+  if (elPend) {
+    if (tPending.length) {
+      const noNext = cursor >= allCandles.length - 1;
+      document.getElementById('pending-text').textContent =
+        `翌寄付注文: ${pendingSummary()}${noNext ? '（翌日データなし）' : ''}`;
+      elPend.style.display = 'flex';
+    } else {
+      elPend.style.display = 'none';
+    }
+  }
 }
 
-function addHistory(time, type, qty, price, pnl) {
-  tHistory.unshift({ time, type, qty, price, pnl: Math.round(pnl) });
+function addHistory(time, type, qty, price, pnl, entry) {
+  tHistory.unshift({ time, type, qty, price, pnl: Math.round(pnl), entry: entry == null ? null : entry });
 }
 
 function resetTradeState() {
-  tPosSell = 0; tPosBuy = 0;
-  tAvgSellPrice = 0; tAvgBuyPrice = 0;
+  tLotsSell = []; tLotsBuy = [];
+  tPending = [];
   tRealizedPnL = 0;
   tHistory = [];
   
@@ -1946,6 +2098,10 @@ function resetTradeState() {
   updateTradePanel();
 }
 
+function fmtEntry(e) {
+  if (e == null) return '-';
+  return (Math.round(e * 10) / 10).toLocaleString();
+}
 
 function showHistory() {
   const tbody = document.getElementById('hist-tbody');
@@ -1956,6 +2112,7 @@ function showHistory() {
       <td>${toYYMMDD(h.time)}</td>
       <td>${h.type}</td>
       <td>${h.qty}</td>
+      <td>${fmtEntry(h.entry)}</td>
       <td>${h.price.toLocaleString()}</td>
       <td class="${h.pnl > 0 ? 'up-color' : (h.pnl < 0 ? 'down-color' : '')}">${h.pnl ? h.pnl.toLocaleString() : '-'}</td>
     `;
@@ -1971,9 +2128,9 @@ function closeHistory() {
 /** 取引履歴をクリップボードにコピー (TSV形式) */
 function copyHistory() {
   if (!tHistory.length) { alert('履歴がありません'); return; }
-  let text = "日時\t操作\t数量\t価格\t損益\n";
+  let text = "日時\t操作\t数量\t建値\t約定値\t損益\n";
   for (const h of tHistory) {
-    text += `${toYYMMDD(h.time)}\t${h.type}\t${h.qty}\t${h.price}\t${h.pnl}\n`;
+    text += `${toYYMMDD(h.time)}\t${h.type}\t${h.qty}\t${h.entry == null ? '' : Math.round(h.entry * 10) / 10}\t${h.price}\t${h.pnl}\n`;
   }
   navigator.clipboard.writeText(text).then(() => {
     alert('クリップボードにコピーしました');
@@ -2062,6 +2219,8 @@ function filterStocks(val) {
    エントリポイント
 ====================================================== */
 buildStockSelect();
+document.getElementById('exec-mode').value = tExecMode;
+document.getElementById('close-order').value = tCloseOrder;
 initChart();
 const stockCodes = Object.keys(STOCK_INFO);
 const randomCode = stockCodes[Math.floor(Math.random() * stockCodes.length)];
