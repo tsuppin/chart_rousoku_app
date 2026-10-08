@@ -329,12 +329,29 @@
     .tp-pending button:hover { border-color: var(--accent); color: var(--text); }
 
     /* 履歴モーダル */
-    .hist-table-wrap { max-height: 300px; overflow-y: auto; margin-top: 15px; border: 1px solid var(--border); border-radius: 6px; }
-    .hist-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'Roboto Mono', monospace; }
-    .hist-table th { background: var(--hover); color: var(--dim); font-weight: normal; padding: 8px; text-align: right; position: sticky; top: 0; z-index: 1; }
+    .hist-modal-card { width: 780px; max-width: 96vw; }
+    .hist-table-wrap { max-height: 380px; overflow-y: auto; margin-top: 15px; border: 1px solid var(--border); border-radius: 6px; }
+    .hist-table { width: 100%; border-collapse: collapse; font-size: 11px; font-family: 'Roboto Mono', monospace; }
+    .hist-table th { background: var(--hover); color: var(--dim); font-weight: normal; padding: 6px 8px; text-align: right; position: sticky; top: 0; z-index: 1; white-space: nowrap; }
     .hist-table th:first-child { text-align: left; }
-    .hist-table td { padding: 8px; text-align: right; border-top: 1px solid var(--border); }
+    .hist-table td { padding: 6px 8px; text-align: right; border-top: 1px solid var(--border); white-space: nowrap; }
     .hist-table td:first-child { text-align: left; }
+    .hist-memo-input {
+      width: 100%;
+      min-width: 140px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      padding: 3px 6px;
+      font-size: 11px;
+      outline: none;
+      box-sizing: border-box;
+    }
+    .hist-memo-input:focus {
+      border-color: var(--accent);
+      background: rgba(255, 255, 255, 0.1);
+    }
 
     @media (max-width: 800px) {
       #main-area { flex-direction: column; }
@@ -957,18 +974,31 @@
      取引履歴ダイアログ
 ==================================================== -->
 <div class="modal-bg" id="hist-modal">
-  <div class="modal-card" style="width: 500px;">
+  <div class="modal-card hist-modal-card">
     <div class="m-h">🕒 取引履歴</div>
     <div class="hist-table-wrap">
       <table class="hist-table">
         <thead>
-          <tr><th>日時</th><th>操作</th><th>数量</th><th>建値</th><th>約定値</th><th>損益</th></tr>
+          <tr>
+            <th style="text-align:left;">日時</th>
+            <th>操作</th>
+            <th>数量</th>
+            <th>建値</th>
+            <th>約定値</th>
+            <th>損益</th>
+            <th>損益率</th>
+            <th>保有</th>
+            <th style="text-align:left;">メモ (AI分析用)</th>
+          </tr>
         </thead>
         <tbody id="hist-tbody"></tbody>
       </table>
     </div>
-    <div class="m-acts">
-      <button class="m-btn teal" onclick="copyHistory()">履歴をコピー</button>
+    <div class="m-acts" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <div style="display:flex; gap:8px;">
+        <button class="m-btn teal" onclick="copyHistoryAI()">🤖 AI分析用にコピー</button>
+        <button class="m-btn" style="background:#262b3d; color:var(--text); border:1px solid var(--border);" onclick="copyHistory()">TSVコピー</button>
+      </div>
       <button class="m-btn cancel" onclick="closeHistory()">閉じる</button>
     </div>
   </div>
@@ -1927,7 +1957,7 @@ function closeLots(side, n, idx, price, label) {
   const pnl = closed.reduce((s, l) => s + lotPnl(l, side, price), 0);
   const qty = closed.reduce((s, l) => s + l.unit, 0);
   tRealizedPnL += pnl;
-  addHistory(allCandles[idx].time, label, qty, price, pnl, avgLotPrice(closed));
+  addHistory(allCandles[idx].time, label, qty, price, pnl, avgLotPrice(closed), closed, idx);
   return closed.length;
 }
 
@@ -1948,7 +1978,7 @@ function executeAction(action, idx, price) {
   const lots = side === 'buy' ? tLotsBuy : tLotsSell;
   if (action.delta > 0) {
     for (let i = 0; i < action.delta; i++) lots.push({ price, time: c.time, unit });
-    addHistory(c.time, side === 'buy' ? '買追加' : '売追加', action.delta * unit, price, 0, null);
+    addHistory(c.time, side === 'buy' ? '買追加' : '売追加', action.delta * unit, price, 0, null, null, idx);
     setCandleColor(idx, side === 'buy' ? 'buy_entry' : 'sell_entry');
   } else if (action.delta < 0) {
     const n = Math.min(Math.abs(action.delta), lots.length);
@@ -2110,8 +2140,63 @@ function updateTradePanel(currentPrice) {
   }
 }
 
-function addHistory(time, type, qty, price, pnl, entry) {
-  tHistory.unshift({ time, type, qty, price, pnl: Math.round(pnl), entry: entry == null ? null : entry });
+function addHistory(time, type, qty, price, pnl, entry, closedLots = null, candleIdx = null) {
+  const c = (candleIdx != null && allCandles[candleIdx]) ? allCandles[candleIdx] : null;
+
+  // 保有期間の計算（決済の場合）
+  let entryTimes = [];
+  let holdingBars = null;
+  let holdingDays = null;
+  if (closedLots && closedLots.length && candleIdx != null) {
+    entryTimes = closedLots.map(l => l.time);
+    const minEntryTime = entryTimes.reduce((min, t) => (!min || t < min ? t : min), null);
+    const entryIdx = allCandles.findIndex(x => x.time === minEntryTime);
+    if (entryIdx >= 0) {
+      holdingBars = candleIdx - entryIdx;
+    }
+    if (minEntryTime && time) {
+      const d1 = new Date(toDateStr(minEntryTime));
+      const d2 = new Date(toDateStr(time));
+      holdingDays = Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+    }
+  }
+
+  // 移動平均線の状態取得 (candleIdx時点)
+  const maInfo = {};
+  if (candleIdx != null && allMAs) {
+    for (const p of [5, 20, 50, 100]) {
+      if (allMAs[p] && allMAs[p][candleIdx]) {
+        maInfo['ma' + p] = allMAs[p][candleIdx].value;
+      }
+    }
+  }
+
+  // 損益率（%）
+  let pnlRate = null;
+  if (entry != null && entry > 0 && qty > 0 && pnl !== 0) {
+    pnlRate = (pnl / (entry * qty)) * 100;
+  }
+
+  const stockInfo = STOCK_INFO[currentCode] || { name: currentCode };
+
+  tHistory.unshift({
+    id: 'th_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    code: currentCode,
+    stockName: stockInfo.name || currentCode,
+    time,
+    type,
+    qty,
+    price,
+    pnl: Math.round(pnl),
+    pnlRate: pnlRate != null ? Math.round(pnlRate * 100) / 100 : null,
+    entry: entry == null ? null : entry,
+    entryTimes,
+    holdingBars,
+    holdingDays,
+    candle: c ? { open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume } : null,
+    mas: maInfo,
+    note: ''
+  });
 }
 
 function resetTradeState() {
@@ -2139,21 +2224,39 @@ function fmtEntry(e) {
   return (Math.round(e * 10) / 10).toLocaleString();
 }
 
+function escapeHtml(str) {
+  return String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function updateHistoryNote(index, val) {
+  if (tHistory[index]) {
+    tHistory[index].note = val;
+  }
+}
+
 function showHistory() {
   const tbody = document.getElementById('hist-tbody');
   tbody.innerHTML = '';
-  for (const h of tHistory) {
+  tHistory.forEach((h, idx) => {
     const tr = document.createElement('tr');
+    const pnlRateText = h.pnlRate != null ? `${h.pnlRate > 0 ? '+' : ''}${h.pnlRate.toFixed(1)}%` : '-';
+    const periodText = h.holdingBars != null ? `${h.holdingBars}本` : '-';
+    const periodTitle = h.holdingDays != null ? `${h.holdingDays}日間 (${h.holdingBars}営業日)` : '';
     tr.innerHTML = `
       <td>${toYYMMDD(h.time)}</td>
       <td>${h.type}</td>
       <td>${h.qty}</td>
       <td>${fmtEntry(h.entry)}</td>
       <td>${h.price.toLocaleString()}</td>
-      <td class="${h.pnl > 0 ? 'up-color' : (h.pnl < 0 ? 'down-color' : '')}">${h.pnl ? h.pnl.toLocaleString() : '-'}</td>
+      <td class="${h.pnl > 0 ? 'up-color' : (h.pnl < 0 ? 'down-color' : '')}">${h.pnl ? (h.pnl > 0 ? '+' : '') + h.pnl.toLocaleString() : '-'}</td>
+      <td class="${h.pnlRate > 0 ? 'up-color' : (h.pnlRate < 0 ? 'down-color' : '')}">${pnlRateText}</td>
+      <td title="${periodTitle}">${periodText}</td>
+      <td style="text-align:left;">
+        <input type="text" class="hist-memo-input" value="${escapeHtml(h.note || '')}" placeholder="メモ・反省・根拠..." onchange="updateHistoryNote(${idx}, this.value)">
+      </td>
     `;
     tbody.appendChild(tr);
-  }
+  });
   document.getElementById('hist-modal').classList.add('open');
 }
 
@@ -2164,12 +2267,91 @@ function closeHistory() {
 /** 取引履歴をクリップボードにコピー (TSV形式) */
 function copyHistory() {
   if (!tHistory.length) { alert('履歴がありません'); return; }
-  let text = "日時\t操作\t数量\t建値\t約定値\t損益\n";
+  let text = "日時\t銘柄\t操作\t数量\t建値\t約定値\t損益\t損益率\t保有バー数\tメモ\n";
+  const stockName = (STOCK_INFO[currentCode] && STOCK_INFO[currentCode].name) || currentCode;
   for (const h of tHistory) {
-    text += `${toYYMMDD(h.time)}\t${h.type}\t${h.qty}\t${h.entry == null ? '' : Math.round(h.entry * 10) / 10}\t${h.price}\t${h.pnl}\n`;
+    const pnlRate = h.pnlRate != null ? `${h.pnlRate}%` : '';
+    const bars = h.holdingBars != null ? `${h.holdingBars}本` : '';
+    const note = (h.note || '').replace(/\t/g, ' ').replace(/\r?\n/g, ' ');
+    text += `${toYYMMDD(h.time)}\t${h.code || currentCode} ${h.stockName || stockName}\t${h.type}\t${h.qty}\t${h.entry == null ? '' : Math.round(h.entry * 10) / 10}\t${h.price}\t${h.pnl}\t${pnlRate}\t${bars}\t${note}\n`;
   }
   navigator.clipboard.writeText(text).then(() => {
-    alert('クリップボードにコピーしました');
+    alert('クリップボードにコピーしました (TSV形式)');
+  }).catch(err => {
+    console.error('Copy failed', err);
+    alert('コピーに失敗しました');
+  });
+}
+
+/** AI分析用にプロンプト・詳細情報付きでコピー */
+function copyHistoryAI() {
+  if (!tHistory.length) { alert('履歴がありません'); return; }
+
+  const stockInfo = STOCK_INFO[currentCode] || { name: currentCode };
+  const stockName = stockInfo.name || currentCode;
+
+  // 集計データ
+  const closeTrades = tHistory.filter(h => h.entry != null && h.pnl !== 0);
+  const winTrades = closeTrades.filter(h => h.pnl > 0);
+  const loseTrades = closeTrades.filter(h => h.pnl < 0);
+  const winRate = closeTrades.length > 0 ? ((winTrades.length / closeTrades.length) * 100).toFixed(1) : '0.0';
+
+  let text = `# トレード履歴分析依頼\n\n`;
+  text += `以下のトレードシミュレーション履歴を分析し、\n`;
+  text += `1. 勝ちトレードと負けトレードの特徴・共通点\n`;
+  text += `2. 移動平均線や相場環境に対するエントリー・イグジット判断の妥当性\n`;
+  text += `3. メモ（心理・反省・根拠）を踏まえた勝率・リスクリワードの改善提案\n`;
+  text += `を日本語で具体的・実践的に提示してください。\n\n`;
+
+  text += `## トレード基本情報\n`;
+  text += `- 対象銘柄: ${currentCode} (${stockName})\n`;
+  text += `- 決済トレード数: ${closeTrades.length}回 (勝: ${winTrades.length}回 / 負: ${loseTrades.length}回 / 勝率: ${winRate}%)\n`;
+  text += `- 総実現損益: ${tRealizedPnL > 0 ? '+' : ''}${tRealizedPnL.toLocaleString()}円\n\n`;
+
+  text += `## 取引履歴明細 (時系列)\n`;
+
+  // 時系列順（古い順）にしてAIがトレードの流れを追いやすくする
+  const chronological = [...tHistory].reverse();
+
+  chronological.forEach((h, i) => {
+    const num = i + 1;
+    const isClose = h.entry != null;
+    text += `\n### [No.${num}] ${toYYMMDD(h.time)} ${h.type}\n`;
+    text += `- 操作: ${h.type} / 数量: ${h.qty}株\n`;
+    text += `- 約定価格: ${h.price.toLocaleString()}円`;
+    if (isClose) {
+      text += ` (建値: ${fmtEntry(h.entry)}円)\n`;
+      text += `- 損益: ${h.pnl > 0 ? '+' : ''}${h.pnl.toLocaleString()}円 (${h.pnlRate > 0 ? '+' : ''}${h.pnlRate}%)\n`;
+      if (h.holdingBars != null) {
+        text += `- 保有期間: ${h.holdingBars}営業日${h.holdingDays != null ? ` (${h.holdingDays}日間)` : ''}\n`;
+      }
+    } else {
+      text += `\n`;
+    }
+
+    if (h.candle) {
+      text += `- 約定日相場 (四本値・出来高): 始値:${h.candle.open} / 高値:${h.candle.high} / 安値:${h.candle.low} / 終値:${h.candle.close} / 出来高:${(h.candle.volume || 0).toLocaleString()}\n`;
+    }
+
+    if (h.mas && Object.keys(h.mas).length) {
+      const maParts = [];
+      for (const [k, v] of Object.entries(h.mas)) {
+        if (v != null) {
+          const p = k.replace('ma', '');
+          const diff = h.candle ? (((h.candle.close - v) / v) * 100).toFixed(1) : null;
+          maParts.push(`SMA${p}:${v}${diff != null ? `(乖離:${diff > 0 ? '+' : ''}${diff}%)` : ''}`);
+        }
+      }
+      if (maParts.length) {
+        text += `- 移動平均線: ${maParts.join(', ')}\n`;
+      }
+    }
+
+    text += `- メモ (心理・根拠・反省): ${h.note && h.note.trim() ? h.note.trim() : '(なし)'}\n`;
+  });
+
+  navigator.clipboard.writeText(text).then(() => {
+    alert('AI分析用のトレード履歴をクリップボードにコピーしました！\nAI（Gemini等）にそのまま貼り付けて分析してください。');
   }).catch(err => {
     console.error('Copy failed', err);
     alert('コピーに失敗しました');
