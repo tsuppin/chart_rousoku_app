@@ -117,6 +117,17 @@ def update_all():
                     time.sleep(1.0)
                     continue
 
+                latest_dt = datetime.strptime(candles[-1]["time"], "%Y-%m-%d")
+                if (end_dt - latest_dt).days > 7:
+                    last_error = f"Stale data (latest: {candles[-1]['time']})"
+                    time.sleep(1.0)
+                    continue
+
+                if len(candles) < 100:
+                    last_error = f"Insufficient candle data ({len(candles)} candles, latest: {candles[-1]['time']})"
+                    time.sleep(1.0)
+                    continue
+
                 # データ更新
                 output = {
                     "code": code,
