@@ -462,7 +462,9 @@
     #win-sel.view-sel { width: 138px; flex-shrink: 0; }
     #win-sel.view-sel .vbtn { flex: 1 1 0; width: auto; min-width: 0; padding-left: 2px; padding-right: 2px; font-size: 10px; white-space: nowrap; overflow: hidden; letter-spacing: -0.3px; }
     /* 表示モード: 非表示にするチャート */
-    #chart-wrap.view-d #chart-weekly, #chart-wrap.view-d #chart-monthly, #chart-wrap.view-dw #chart-monthly { display: none; }
+    #chart-wrap.hide-d #chart-daily, #chart-wrap.hide-w #chart-weekly, #chart-wrap.hide-m #chart-monthly { display: none; }
+    /* 先頭に表示されるチャートの上罫線を消す */
+    #chart-wrap.hide-d #chart-weekly, #chart-wrap.hide-d.hide-w #chart-monthly { border-top: none; }
 
     #key-hint { font-size: 10px; color: var(--dim); margin-left: 6px; white-space: nowrap; }
 
@@ -927,10 +929,11 @@
   <div id="footer-row2">
     <button class="btn teal" onclick="openInitModal()">初期</button>
 
-    <!-- 表示チャート切替（選択中のボタンをもう一度押すと日足・週足・月足の3画面表示に戻る） -->
+    <!-- 表示チャート切替（日足・週足・月足をそれぞれ個別に表示/非表示。最低1つは表示） -->
     <div id="win-sel" class="view-sel">
-      <button class="wbtn vbtn" id="btn-view-d"  onclick="setViewMode('d')"  title="日足のみ表示">日足のみ</button>
-      <button class="wbtn vbtn" id="btn-view-dw" onclick="setViewMode('dw')" title="日足・週足のみ表示">日足週足のみ</button>
+      <button class="wbtn vbtn" id="btn-view-d" onclick="toggleChartView('d')" title="日足の表示/非表示">日足</button>
+      <button class="wbtn vbtn" id="btn-view-w" onclick="toggleChartView('w')" title="週足の表示/非表示">週足</button>
+      <button class="wbtn vbtn" id="btn-view-m" onclick="toggleChartView('m')" title="月足の表示/非表示">月足</button>
 
     </div>
 
@@ -1307,14 +1310,14 @@ function initChart() {
   ro.observe(wrap);
 
   // 前回の表示モードを復元
-  applyViewMode(localStorage.getItem('viewMode') || 'all');
+  applyViewMode(localStorage.getItem('viewMode') || 'dwm');
 }
 
 /* ======================================================
-   表示チャート切替（日足のみ / 日足週足のみ / 全表示）
+   表示チャート切替（日足 / 週足 / 月足 を個別にON/OFF）
    - 非表示のチャートの領域を表示中のチャートで使う
 ====================================================== */
-let viewMode = 'all';   // 'all' | 'd' | 'dw'
+let viewMode = 'dwm';   // 表示中チャート: 'd'日足 'w'週足 'm'月足 の組合せ
 
 /** 各チャートを、それぞれのコンテナ（flexで分配された高さ）に合わせてリサイズ */
 function resizeCharts() {
@@ -1333,21 +1336,30 @@ function resizeCharts() {
   }
 }
 
+/** 表示チャート集合を適用 (例: 'dwm' = 全表示, 'd' = 日足のみ) */
 function applyViewMode(mode) {
-  viewMode = (mode === 'd' || mode === 'dw') ? mode : 'all';
+  let v = String(mode || '');
+  // 旧形式の保存値を変換
+  if (v === 'all') v = 'dwm';
+  v = ['d', 'w', 'm'].filter(k => v.includes(k)).join('');
+  if (!v) v = 'dwm';   // 最低1つは表示
+  viewMode = v;
   const wrap = document.getElementById('chart-wrap');
-  wrap.classList.toggle('view-d',  viewMode === 'd');
-  wrap.classList.toggle('view-dw', viewMode === 'dw');
-  document.getElementById('btn-view-d')?.classList.toggle('on', viewMode === 'd');
-  document.getElementById('btn-view-dw')?.classList.toggle('on', viewMode === 'dw');
+  for (const k of ['d', 'w', 'm']) {
+    const on = viewMode.includes(k);
+    wrap.classList.toggle('hide-' + k, !on);
+    document.getElementById('btn-view-' + k)?.classList.toggle('on', on);
+  }
   localStorage.setItem('viewMode', viewMode);
   resizeCharts();
   scrollKeepZoom();
 }
 
-/** ボタン押下: 選択中のモードをもう一度押すと3画面表示に戻る */
-function setViewMode(mode) {
-  applyViewMode(viewMode === mode ? 'all' : mode);
+/** ボタン押下: 日足/週足/月足を個別に表示・非表示（全て非表示にはしない） */
+function toggleChartView(k) {
+  const next = viewMode.includes(k) ? viewMode.replace(k, '') : viewMode + k;
+  if (!next) return;   // 最後の1つは消さない
+  applyViewMode(next);
 }
 
 /** 日付から月曜日(週の開始日)を取得 */
