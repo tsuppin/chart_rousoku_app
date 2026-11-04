@@ -251,8 +251,11 @@
       flex: 1; background: var(--hover); border: 1px solid var(--border);
       color: var(--text); padding: 5px; font-size: 11px; border-radius: 5px;
       cursor: pointer; transition: 0.15s; font-family: inherit;
+      height: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1;
     }
     .tp-btn:hover { background: var(--active); border-color: var(--accent); }
+    .tp-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+    .tp-val.counting { color: #FFD54F; }
 
     .tp-pos-section { flex: 1; }
     .tp-pos-header { font-size: 12px; font-weight: 700; margin-bottom: 6px; text-align: center; color: var(--text); }
@@ -639,7 +642,9 @@
       }
 
       /* PNL セクション：横一列に圧縮 */
-      #trade-panel .tp-section:first-child {
+      #trade-panel #candle-count-section,
+      #trade-panel #pnl-section {
+        min-height: 28px;
         padding: 3px 8px;
         display: flex;
         flex-direction: row;
@@ -665,7 +670,7 @@
         flex-shrink: 0;
         gap: 4px;
       }
-      #trade-panel .tp-btn { font-size: 9px; padding: 3px 6px; white-space: nowrap; }
+      #trade-panel .tp-btn { font-size: 9px; padding: 0 8px; height: 22px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; white-space: nowrap; }
 
       /* 両建て時の内訳（pnl-detail）を横並びに */
       #trade-panel #pnl-detail {
@@ -823,7 +828,18 @@
   </div>
 
   <div id="trade-panel">
-    <div class="tp-section">
+    <div class="tp-section" id="candle-count-section">
+      <div class="tp-row">
+        <span class="tp-lbl">ローソク足</span>
+        <span class="tp-val" id="candle-count-val">0本</span>
+      </div>
+      <div class="tp-actions">
+        <button class="tp-btn" id="btn-count-start" onclick="startCandleCount()">開始</button>
+        <button class="tp-btn" id="btn-count-reset" onclick="resetCandleCount()">リセット</button>
+      </div>
+    </div>
+
+    <div class="tp-section" id="pnl-section">
       <div class="tp-row">
         <span class="tp-lbl">評価損益</span>
         <span class="tp-val" id="unrealized-pnl">0円</span>
@@ -1534,6 +1550,7 @@ async function switchStock(code) {
 
     // トレード状態のリセット
     if (typeof resetTradeState === 'function') resetTradeState();
+    if (typeof resetCandleCount === 'function') resetCandleCount();
 
     // 全データをセット
     refreshChart();
@@ -1755,11 +1772,42 @@ function showBarInfo(idx) {
   }
 
   updateTradePanel(c.close);
+  updateCandleCountUI();
 }
 
 /* ======================================================
    ローディング表示
 ====================================================== */
+let candleCountStartIdx = null;
+
+function startCandleCount() {
+  if (!allCandles.length) return;
+  candleCountStartIdx = cursor;
+  updateCandleCountUI();
+}
+
+function resetCandleCount() {
+  candleCountStartIdx = null;
+  updateCandleCountUI();
+}
+
+function updateCandleCountUI() {
+  const valEl = document.getElementById('candle-count-val');
+  const startBtn = document.getElementById('btn-count-start');
+  if (!valEl || !startBtn) return;
+
+  if (candleCountStartIdx === null || !allCandles.length) {
+    valEl.textContent = '0本';
+    valEl.classList.remove('counting');
+    startBtn.classList.remove('active');
+  } else {
+    const count = Math.max(0, cursor - candleCountStartIdx + 1);
+    valEl.textContent = `${count}本`;
+    valEl.classList.add('counting');
+    startBtn.classList.add('active');
+  }
+}
+
 function setLoading(show, msg = '') {
   const el = document.getElementById('loading');
   el.classList.toggle('hidden', !show);
