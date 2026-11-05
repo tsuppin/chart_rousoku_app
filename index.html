@@ -1278,23 +1278,11 @@ function calcLwcTickSpan(high, low, scaleHeight) {
   return best;
 }
 
-/** 右価格ラベルに必ず一致させつつ 2〜5 分割した細かい水平グリッド間隔を算出 */
+/** 右価格ラベルに必ず一致させつつ、目盛間隔が広い箇所のみ中間線を補う水平グリッド間隔を算出 */
 function calcFinePriceStep(high, low, paneHeight) {
   const majorSpan = calcLwcTickSpan(high, low, paneHeight);
   const majorPx = paneHeight * majorSpan / (high - low);
-  const exp = Math.floor(Math.log10(majorSpan) + 1e-9);
-  const mant = +(majorSpan / Math.pow(10, exp)).toFixed(4);
-
-  let sub = 2;
-  if (mant === 5) {
-    sub = majorPx >= 55 ? 5 : 2;
-  } else if (mant === 4) {
-    sub = majorPx >= 52 ? 4 : 2;
-  } else if (mant === 2.5) {
-    sub = majorPx >= 55 ? 5 : 2;
-  } else {
-    sub = majorPx >= 52 ? 4 : 2;
-  }
+  let sub = majorPx >= 52 ? 2 : 1;
   if (majorSpan / sub < 0.01 - 1e-9) sub = 1;
   return +(majorSpan / sub).toPrecision(10);
 }
