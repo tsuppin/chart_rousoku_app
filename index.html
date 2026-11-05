@@ -1222,6 +1222,26 @@ MA_DEFS.forEach(d => {
 /* ======================================================
    チャート初期化
 ====================================================== */
+/** 横軸（日付エリア）の上下余白を詰めて高さをコンパクト化 (28px -> 18px) */
+function compactTimeScale(c) {
+  try {
+    const taw = c?.Ub?.Um;
+    if (!taw || typeof taw.ym !== 'function') return;
+    const origYm = taw.ym.bind(taw);
+    taw.ym = function () {
+      const ro = origYm();
+      if (ro) {
+        ro.T  = 1.5; // 上部ティック余白 (既定: 5)
+        ro.L  = 1;   // 上パディング     (既定: 2.75)
+        ro.B  = 2;   // 下パディング     (既定: 2.75)
+        ro.km = 1.5; // 下オフセット     (既定: 3.67)
+      }
+      return ro;
+    };
+    c.timeScale().applyOptions({});
+  } catch (_) {}
+}
+
 function initChart() {
   const wrap = document.getElementById('chart-wrap');
   
@@ -1293,6 +1313,10 @@ function initChart() {
   });
 
   closeSeriesM = chartM.addLineSeries({ color: '#9e9e9e', lineWidth: 1, priceLineVisible: false, visible: false });
+
+  compactTimeScale(chart);
+  compactTimeScale(chartW);
+  compactTimeScale(chartM);
 
   // --- MAシリーズ作成 (日足・週足・月足共通) ---
   for (const d of MA_DEFS) {
