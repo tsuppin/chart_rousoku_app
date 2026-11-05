@@ -1242,6 +1242,140 @@ function compactTimeScale(c) {
   } catch (_) {}
 }
 
+const GRID_LINE_COLOR = 'rgba(255, 255, 255, 0.25)';
+
+/** Lightweight Charts (PriceTickMarkBuilder) と同一の主目盛間隔を算出 */
+function calcLwcTickSpan(high, low, scaleHeight) {
+  if (!(high > low) || scaleHeight <= 2) return 1;
+  const maxTickSpan = (high - low) * 28 / scaleHeight; // Math.ceil(11 * 2.5) = 28
+  const minMove = 0.01;
+  const eps = 1e-14;
+  const dividerSets = [[2, 2.5, 2], [2, 2, 2.5], [2.5, 2, 2]];
+  let best = Infinity;
+
+  for (let s = 0; s < dividerSets.length; s++) {
+    const divs = dividerSets[s];
+    let span = Math.pow(10, Math.max(0, Math.ceil(Math.log10(high - low))));
+    let idx = 0;
+    let c = divs[0];
+    while (span >= minMove - eps && span > minMove + eps && span >= maxTickSpan * c - eps && span >= 1 - eps) {
+      span /= c;
+      c = divs[++idx % 3];
+    }
+    if (span <= minMove + eps) span = minMove;
+    span = Math.max(1, span);
+    if (Math.abs(span - 1) <= eps) {
+      const fDivs = [2, 2.5, 2];
+      idx = 0;
+      c = fDivs[0];
+      while (span >= maxTickSpan * c - eps && span > minMove + eps) {
+        span /= c;
+        c = fDivs[++idx % 3];
+      }
+    }
+    if (span < best) best = span;
+  }
+  return best;
+}
+
+/** 右価格ラベルに必ず一致させつつ 2〜5 分割した細かい水平グリッド間隔を算出 */
+function calcFinePriceStep(high, low, paneHeight) {
+  const majorSpan = calcLwcTickSpan(high, low, paneHeight);
+  const majorPx = paneHeight * majorSpan / (high - low);
+  const exp = Math.floor(Math.log10(majorSpan) + 1e-9);
+  const mant = +(majorSpan / Math.pow(10, exp)).toFixed(4);
+
+  let sub = 2;
+  if (mant === 5) {
+    sub = majorPx >= 55 ? 5 : 2;
+  } else if (mant === 4) {
+    sub = majorPx >= 52 ? 4 : 2;
+  } else if (mant === 2.5) {
+    sub = majorPx >= 55 ? 5 : 2;
+  } else {
+    sub = majorPx >= 52 ? 4 : 2;
+  }
+  if (majorSpan / sub < 0.01 - 1e-9) sub = 1;
+  return +(majorSpan / sub).toPrecision(10);
+}
+
+/** 最背面 (zOrder: 'bottom') に細かい水平グリッドのみを1pxで描画する SeriesPrimitive */
+function createFineGridPrimitive(getSeriesList) {
+  let chartInst = null;
+
+  const renderer = {
+    draw(target) {
+      if (!chartInst) return;
+      target.useBitmapCoordinateSpace(({ context: ctx, bitmapSize, horizontalPixelRatio, verticalPixelRatio }) => {
+        const paneW = bitmapSize.width / horizontalPixelRatio;
+        const paneH = bitmapSize.height / verticalPixelRatio;
+        if (paneW <= 2 || paneH <= 2) return;
+
+        const hCoords = [];
+        const seriesList = getSeriesList();
+        let refSeries = null;
+        let pTop = null, pBot = null;
+        for (let i = 0; i < seriesList.length; i++) {
+          const s = seriesList[i];
+          if (!s) continue;
+          const a = s.coordinateToPrice(0);
+          const b = s.coordinateToPrice(paneH - 1);
+          if (a !== null && b !== null && isFinite(a) && isFinite(b) && Math.abs(a - b) > 1e-9) {
+            refSeries = s;
+            pTop = a;
+            pBot = b;
+            break;
+          }
+        }
+
+        if (refSeries) {
+          const high = Math.max(pTop, pBot);
+          const low  = Math.min(pTop, pBot);
+          const step = calcFinePriceStep(high, low, paneH);
+          if (step > 0 && isFinite(step)) {
+            const startN = Math.floor(low / step);
+            const endN   = Math.ceil(high / step);
+            if (endN - startN <= 400) {
+              for (let k = startN; k <= endN; k++) {
+                const y = refSeries.priceToCoordinate(k * step);
+                if (y !== null && y >= -1 && y <= paneH + 1) hCoords.push(y);
+              }
+            }
+          }
+        }
+
+        if (!hCoords.length) return;
+
+        // Lightweight Charts 標準 GridRenderer と同一の1物理ピクセル描画
+        const lineWidth = Math.max(1, Math.floor(horizontalPixelRatio));
+        ctx.save();
+        ctx.lineWidth = lineWidth;
+        if (lineWidth % 2) ctx.translate(0.5, 0.5);
+        ctx.strokeStyle = GRID_LINE_COLOR;
+        ctx.beginPath();
+        for (let i = 0; i < hCoords.length; i++) {
+          const y = Math.round(hCoords[i] * verticalPixelRatio);
+          ctx.moveTo(-lineWidth, y);
+          ctx.lineTo(bitmapSize.width + lineWidth, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      });
+    },
+  };
+
+  const paneViews = [{
+    zOrder() { return 'bottom'; },
+    renderer() { return renderer; },
+  }];
+
+  return {
+    attached(param) { chartInst = param.chart; },
+    detached() { chartInst = null; },
+    paneViews() { return paneViews; },
+  };
+}
+
 function initChart() {
   const wrap = document.getElementById('chart-wrap');
   
@@ -1253,8 +1387,8 @@ function initChart() {
       fontSize:   11,
     },
     grid: {
-      vertLines: { color: 'rgba(42,46,66,.4)' },
-      horzLines: { color: 'rgba(42,46,66,.4)' },
+      vertLines: { color: GRID_LINE_COLOR, visible: false },
+      horzLines: { color: GRID_LINE_COLOR, visible: false },
     },
     crosshair: {
       mode: LightweightCharts.CrosshairMode.Normal,
@@ -1333,6 +1467,17 @@ function initChart() {
       if (el) el.classList.add('off');
     }
   }
+
+  // --- カスタム細密水平グリッド (最背面 zOrder: 'bottom') ---
+  candleSeries.attachPrimitive(createFineGridPrimitive(
+    () => [candleSeries, closeSeries, ...MA_DEFS.map(d => maSeries[d.p])]
+  ));
+  candleSeriesW.attachPrimitive(createFineGridPrimitive(
+    () => [candleSeriesW, closeSeriesW, ...MA_DEFS.map(d => maSeriesW[d.p])]
+  ));
+  candleSeriesM.attachPrimitive(createFineGridPrimitive(
+    () => [candleSeriesM, closeSeriesM, ...MA_DEFS.map(d => maSeriesM[d.p])]
+  ));
 
   /* クロスヘア連動 */
   chart.subscribeCrosshairMove(param => {
