@@ -1415,6 +1415,23 @@ function createFineGridPrimitive(getSeriesList, mode) {
    ドラッグで範囲選択 → 期間内のローソク足本数を表示
 ====================================================== */
 let rangeSelecting = false;
+const rangeBoxes = [];
+let rangeAutoHideTimer = null;
+let lastRangeTouchTime = 0;
+
+function hideAllRangeBoxes() {
+  clearTimeout(rangeAutoHideTimer);
+  rangeAutoHideTimer = null;
+  for (const b of rangeBoxes) b.style.display = 'none';
+}
+
+document.addEventListener('touchstart', (e) => {
+  if (!e.target.closest('.chart-container')) hideAllRangeBoxes();
+}, { passive: true });
+document.addEventListener('mousedown', (e) => {
+  if (Date.now() - lastRangeTouchTime < 500) return;
+  if (!e.target.closest('.chart-container')) hideAllRangeBoxes();
+});
 function setupRangeSelect(containerId, getChart, getSeries) {
   const el = document.getElementById(containerId);
   const box = document.createElement('div');
@@ -1423,8 +1440,10 @@ function setupRangeSelect(containerId, getChart, getSeries) {
   lbl.className = 'range-sel-lbl';
   box.appendChild(lbl);
   el.appendChild(box);
+  rangeBoxes.push(box);
 
   let startX = null;
+  let lastX = null;
 
   const clampX = (e) => {
     const r = el.getBoundingClientRect();
@@ -1455,9 +1474,12 @@ function setupRangeSelect(containerId, getChart, getSeries) {
   const touchX = (ev) => {
     const r = el.getBoundingClientRect();
     const w = getChart().timeScale().width();
-    return Math.max(0, Math.min(ev.touches[0].clientX - r.left, w));
+    const t = (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]);
+    return t ? Math.max(0, Math.min(t.clientX - r.left, w)) : 0;
   };
   el.addEventListener('touchstart', (ev) => {
+    lastRangeTouchTime = Date.now();
+    hideAllRangeBoxes();
     if (ev.touches.length !== 1) { clearTimeout(tTimer); return; }
     const r = el.getBoundingClientRect();
     const t0 = ev.touches[0];
@@ -1468,44 +1490,66 @@ function setupRangeSelect(containerId, getChart, getSeries) {
     clearTimeout(tTimer);
     tTimer = setTimeout(() => {
       tActive = true;
+      rangeSelecting = true;
+      hideTradeTip();
       const r2 = el.getBoundingClientRect();
       startX = Math.max(0, Math.min(tx0 - r2.left, getChart().timeScale().width()));
+      lastX = startX;
       update(startX);
       if (navigator.vibrate) navigator.vibrate(30);
     }, 400);
   }, { capture: true, passive: true });
   el.addEventListener('touchmove', (ev) => {
+    lastRangeTouchTime = Date.now();
     if (tActive) {
       ev.preventDefault();
       ev.stopPropagation();
-      update(touchX(ev));
+      lastX = touchX(ev);
+      update(lastX);
       return;
     }
     const t0 = ev.touches[0];
-    if (Math.abs(t0.clientX - tx0) > 8 || Math.abs(t0.clientY - ty0) > 8) clearTimeout(tTimer);
+    if (Math.abs(t0.clientX - tx0) > 8 || Math.abs(t0.clientY - ty0) > 8) {
+      clearTimeout(tTimer);
+      hideAllRangeBoxes();
+    }
   }, { capture: true, passive: false });
-  const touchEnd = () => {
+  const touchEnd = (ev) => {
+    lastRangeTouchTime = Date.now();
     clearTimeout(tTimer);
+    if (tActive) {
+      if (ev && ev.type === 'touchend') lastX = touchX(ev);
+      if (startX === null || lastX === null || Math.abs(lastX - startX) < 3) {
+        hideAllRangeBoxes();
+      } else {
+        clearTimeout(rangeAutoHideTimer);
+        rangeAutoHideTimer = setTimeout(hideAllRangeBoxes, 2500);
+      }
+      setTimeout(() => { rangeSelecting = false; }, 50);
+    }
     tActive = false;
     startX = null;
+    lastX = null;
   };
   el.addEventListener('touchend', touchEnd, { capture: true, passive: true });
   el.addEventListener('touchcancel', touchEnd, { capture: true, passive: true });
   // 長押し時のコンテキストメニュー/選択を抑止
   el.addEventListener('contextmenu', (ev) => { if (tActive) ev.preventDefault(); });
+  el.addEventListener('wheel', hideAllRangeBoxes, { passive: true });
   el.addEventListener('mousedown', (e) => {
+    if (Date.now() - lastRangeTouchTime < 500) return;
     if (e.button !== 0) return;
+    hideAllRangeBoxes();
     const r = el.getBoundingClientRect();
     if (e.clientX - r.left > getChart().timeScale().width()) return; // 価格軸上は除外
     if (e.clientY - r.top > r.height - 26) return;                   // 時間軸上は除外
     startX = clampX(e);
     rangeSelecting = true;
-    box.style.display = 'none';
     const move = (ev) => update(clampX(ev));
     const up = (ev) => {
       window.removeEventListener('mousemove', move);
       window.removeEventListener('mouseup', up);
-      if (Math.abs(clampX(ev) - startX) < 3) box.style.display = 'none'; // 単なるクリックは非表示
+      if (Math.abs(clampX(ev) - startX) < 3) hideAllRangeBoxes(); // 単なるクリックは非表示
       startX = null;
       rangeSelecting = false;
     };
@@ -1575,6 +1619,7 @@ function setupTradeTip() {
     });
     getC().subscribeClick(param => {
       if (!touchOnly) return;
+      if (rangeSelecting) return;
       showTradeTip(src, param, id, true);    // スマホ: タップで表示 (4秒で自動非表示)
     });
   }
@@ -1718,6 +1763,7 @@ let viewMode = 'dwm';   // 表示中チャート: 'd'日足 'w'週足 'm'月足 
 
 /** 各チャートを、それぞれのコンテナ（flexで分配された高さ）に合わせてリサイズ */
 function resizeCharts() {
+  hideAllRangeBoxes();
   const wrap = document.getElementById('chart-wrap');
   if (!wrap || !chart) return;
   const w = wrap.clientWidth;
@@ -1953,6 +1999,7 @@ async function switchStock(code) {
    チャートデータ全更新（goPrev や初期ロード時）
 ====================================================== */
 function refreshChart() {
+  hideAllRangeBoxes();
   if (!allCandles.length) return;
   
   const slicedD = allCandles.slice(0, cursor + 1);
@@ -1992,6 +2039,7 @@ function refreshChart() {
    表示範囲を winSize バー分に調整（初期ロード・ウィンドウ変更時のみ）
 ====================================================== */
 function updateVisibleRange() {
+  hideAllRangeBoxes();
   if (!allCandles.length) return;
   const endIdx = cursor;
   const startIdx = Math.max(0, endIdx - winSize + 1);
@@ -2087,6 +2135,7 @@ function setWindow(size) {
    OHLCV 表示更新
 ====================================================== */
 function zoomIn() {
+  hideAllRangeBoxes();
   currentBarSpacing = Math.min(currentBarSpacing * 1.15, MAX_BAR_SPACING);
   const options = { barSpacing: currentBarSpacing };
   chart.timeScale().applyOptions(options);
@@ -2096,6 +2145,7 @@ function zoomIn() {
 }
  
 function zoomOut() {
+  hideAllRangeBoxes();
   currentBarSpacing = Math.max(currentBarSpacing / 1.15, MIN_BAR_SPACING);
   const options = { barSpacing: currentBarSpacing };
   chart.timeScale().applyOptions(options);
@@ -2889,6 +2939,7 @@ function copyHistoryAI() {
   }, { passive: true });
 
   wrap.addEventListener('touchend', e => {
+    if (rangeSelecting) return;
     const dx = e.changedTouches[0].clientX - touchStartX;
     const dy = e.changedTouches[0].clientY - touchStartY;
     const dt = Date.now() - touchStartTime;
