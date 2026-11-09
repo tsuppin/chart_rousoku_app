@@ -340,6 +340,8 @@
     .hist-table th:first-child { text-align: left; }
     .hist-table td { padding: 6px 8px; text-align: right; border-top: 1px solid var(--border); white-space: nowrap; }
     .hist-table td:first-child { text-align: left; }
+    .hist-row { cursor: pointer; }
+    .hist-row:hover td { background: var(--hover); }
     .hist-memo-input {
       width: 100%;
       min-width: 140px;
@@ -2555,9 +2557,34 @@ function showHistory() {
         <input type="text" class="hist-memo-input" value="${escapeHtml(h.note || '')}" placeholder="メモ・反省・根拠..." onchange="updateHistoryNote(${idx}, this.value)">
       </td>
     `;
+    tr.className = 'hist-row';
+    tr.title = 'クリックでこの取引のローソク足へ移動';
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('input')) return;
+      jumpToHistory(idx);
+    });
     tbody.appendChild(tr);
   });
   document.getElementById('hist-modal').classList.add('open');
+}
+
+/** 取引履歴の行クリック: その取引のローソク足までカーソルを移動 */
+function jumpToHistory(idx) {
+  const h = tHistory[idx];
+  if (!h) return;
+  if (h.code && h.code !== currentCode) {
+    alert(`この取引は別銘柄 (${h.code}) のものです`);
+    return;
+  }
+  const target = toDateStr(h.time);
+  const ci = allCandles.findIndex(c => toDateStr(c.time) === target);
+  if (ci < 0) return;
+  const newCursor = Math.max(0, Math.min(ci, allCandles.length - 1));
+  flushPendingBeforeJump(newCursor);
+  cursor = newCursor;
+  refreshChart();
+  showBarInfo(cursor);
+  closeHistory();
 }
 
 function closeHistory() {
