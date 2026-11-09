@@ -2317,7 +2317,10 @@ function lotPnl(lot, side, price) {
 
 function avgLotPrice(lots) {
   if (!lots.length) return 0;
-  return lots.reduce((s, l) => s + l.price, 0) / lots.length;
+  // 株数加重平均（建玉ごとに株数が異なる場合も正しい平均建値になる）
+  const totalUnit = lots.reduce((s, l) => s + l.unit, 0);
+  if (!totalUnit) return lots.reduce((s, l) => s + l.price, 0) / lots.length;
+  return lots.reduce((s, l) => s + l.price * l.unit, 0) / totalUnit;
 }
 
 function setCandleColor(idx, actionType) {
