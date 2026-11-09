@@ -94,6 +94,7 @@
     }
 
     /* 銘柄セレクター */
+    #stock-col { display: flex; flex-direction: column; gap: 2px; flex-shrink: 1; min-width: 0; }
     #stock-selector { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
     #stock-search {
       background: var(--hover); border: 1px solid var(--border); color: var(--text);
@@ -722,9 +723,18 @@
   <div id="app-title" style="display: none;">チャートめくり</div>
   <div class="vdiv" style="display: none;"></div>
 
+  <div id="stock-col">
   <div id="stock-selector">
     <input id="stock-search" type="text" placeholder="コード/名前" oninput="filterStocks(this.value)">
     <select id="stock-select" onchange="switchStock(this.value)"></select>
+  </div>
+      <div class="ohlcv">
+        <div class="oitem"><span class="olbl">高値</span><span class="oval" id="v-high">---</span></div>
+        <div class="oitem"><span class="olbl">安値</span><span class="oval" id="v-low">---</span></div>
+        <div class="oitem"><span class="olbl">始値</span><span class="oval" id="v-open">---</span></div>
+        <div class="oitem"><span class="olbl">終値</span><span class="oval" id="v-close">---</span></div>
+        <div class="oitem"><span class="olbl">出来高</span><span class="oval" id="v-vol">---</span></div>
+      </div>
   </div>
 
   <div class="vdiv"></div>
@@ -737,13 +747,6 @@
     <div id="price-group">
       <span id="cur-price" class="neu">---</span>
       <span id="price-chg" class="neu">---</span>
-    </div>
-    <div class="ohlcv">
-      <div class="oitem"><span class="olbl">高値</span><span class="oval" id="v-high">---</span></div>
-      <div class="oitem"><span class="olbl">安値</span><span class="oval" id="v-low">---</span></div>
-      <div class="oitem"><span class="olbl">始値</span><span class="oval" id="v-open">---</span></div>
-      <div class="oitem"><span class="olbl">終値</span><span class="oval" id="v-close">---</span></div>
-      <div class="oitem"><span class="olbl">出来高</span><span class="oval" id="v-vol">---</span></div>
     </div>
   </div>
 </div>
@@ -1288,7 +1291,7 @@ function calcFinePriceStep(high, low, paneHeight) {
 }
 
 /** 最背面 (zOrder: 'bottom') に細かい水平グリッドのみを1pxで描画する SeriesPrimitive */
-function createFineGridPrimitive(getSeriesList) {
+function createFineGridPrimitive(getSeriesList, mode) {
   let chartInst = null;
 
   const renderer = {
@@ -1332,8 +1335,37 @@ function createFineGridPrimitive(getSeriesList) {
           }
         }
 
-        if (!hCoords.length) return;
+        // 縦グリッド: 日足=週ごと / 週足=月ごと / 月足=3か月ごと (各期間の最初の足の位置)
+        const vCoords = [];
+        const baseSeries = seriesList[0];
+        if (baseSeries) {
+          const ts = chartInst.timeScale();
+          const range = ts.getVisibleLogicalRange();
+          if (range) {
+            const keyOf = (t) => {
+              const s = toDateStr(t);
+              if (mode === 'D') return getMonday(s);
+              if (mode === 'W') return s.slice(0, 7);
+              return s.slice(0, 4) + 'Q' + Math.floor((parseInt(s.slice(5, 7), 10) - 1) / 3);
+            };
+            const from = Math.max(1, Math.floor(range.from));
+            const to = Math.min(Math.ceil(range.to), from + 3000);
+            let prev = baseSeries.dataByIndex(from - 1, 0);
+            let prevKey = prev ? keyOf(prev.time) : null;
+            for (let i = from; i <= to; i++) {
+              const d = baseSeries.dataByIndex(i, 0);
+              if (!d) continue;
+              const k = keyOf(d.time);
+              if (prevKey !== null && k !== prevKey) {
+                const x = ts.logicalToCoordinate(i);
+                if (x !== null && x >= -1 && x <= paneW + 1) vCoords.push(x);
+              }
+              prevKey = k;
+            }
+          }
+        }
 
+        if (!hCoords.length && !vCoords.length) return;
         // Lightweight Charts 標準 GridRenderer と同一の1物理ピクセル描画
         const lineWidth = Math.max(1, Math.floor(horizontalPixelRatio));
         ctx.save();
@@ -1345,6 +1377,11 @@ function createFineGridPrimitive(getSeriesList) {
           const y = Math.round(hCoords[i] * verticalPixelRatio);
           ctx.moveTo(-lineWidth, y);
           ctx.lineTo(bitmapSize.width + lineWidth, y);
+        }
+        for (let i = 0; i < vCoords.length; i++) {
+          const x = Math.round(vCoords[i] * horizontalPixelRatio);
+          ctx.moveTo(x, -lineWidth);
+          ctx.lineTo(x, bitmapSize.height + lineWidth);
         }
         ctx.stroke();
         ctx.restore();
@@ -1458,13 +1495,16 @@ function initChart() {
 
   // --- カスタム細密水平グリッド (最背面 zOrder: 'bottom') ---
   candleSeries.attachPrimitive(createFineGridPrimitive(
-    () => [candleSeries, closeSeries, ...MA_DEFS.map(d => maSeries[d.p])]
+    () => [candleSeries, closeSeries, ...MA_DEFS.map(d => maSeries[d.p])],
+    'D'
   ));
   candleSeriesW.attachPrimitive(createFineGridPrimitive(
-    () => [candleSeriesW, closeSeriesW, ...MA_DEFS.map(d => maSeriesW[d.p])]
+    () => [candleSeriesW, closeSeriesW, ...MA_DEFS.map(d => maSeriesW[d.p])],
+    'W'
   ));
   candleSeriesM.attachPrimitive(createFineGridPrimitive(
-    () => [candleSeriesM, closeSeriesM, ...MA_DEFS.map(d => maSeriesM[d.p])]
+    () => [candleSeriesM, closeSeriesM, ...MA_DEFS.map(d => maSeriesM[d.p])],
+    'M'
   ));
 
   /* クロスヘア連動 */
