@@ -194,6 +194,9 @@
       /* モバイルでの高さガタつき防止 */
       height: 100%;
     }
+    /* ドラッグ範囲選択 (ローソク足本数) */
+    .range-sel { position: absolute; top: 0; bottom: 0; background: rgba(41,98,255,0.18); border-left: 1px solid #2962ff; border-right: 1px solid #2962ff; pointer-events: none; z-index: 5; display: none; }
+    .range-sel-lbl { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); background: #2962ff; color: #fff; font-size: 11px; font-family: 'Roboto Mono', monospace; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
     .chart-container {
       flex: 1;
       position: relative;
@@ -1403,6 +1406,106 @@ function createFineGridPrimitive(getSeriesList, mode) {
   };
 }
 
+/* ======================================================
+   ドラッグで範囲選択 → 期間内のローソク足本数を表示
+====================================================== */
+function setupRangeSelect(containerId, getChart, getSeries) {
+  const el = document.getElementById(containerId);
+  const box = document.createElement('div');
+  box.className = 'range-sel';
+  const lbl = document.createElement('div');
+  lbl.className = 'range-sel-lbl';
+  box.appendChild(lbl);
+  el.appendChild(box);
+
+  let startX = null;
+
+  const clampX = (e) => {
+    const r = el.getBoundingClientRect();
+    const w = getChart().timeScale().width();
+    return Math.max(0, Math.min(e.clientX - r.left, w));
+  };
+  const countBars = (x1, x2) => {
+    const ts = getChart().timeScale();
+    const series = getSeries();
+    let a = ts.coordinateToLogical(Math.min(x1, x2));
+    let b = ts.coordinateToLogical(Math.max(x1, x2));
+    if (a === null || b === null) return 0;
+    a = Math.round(a); b = Math.round(b);
+    if (b - a > 20000) b = a + 20000;
+    let n = 0;
+    for (let i = a; i <= b; i++) if (series.dataByIndex(i, 0)) n++;
+    return n;
+  };
+  const update = (x) => {
+    box.style.display = 'block';
+    box.style.left = Math.min(startX, x) + 'px';
+    box.style.width = Math.abs(x - startX) + 'px';
+    lbl.textContent = countBars(startX, x) + '本';
+  };
+
+  // --- スマホ: 長押し(0.4秒)で範囲選択開始 → そのままドラッグ。長押し前の移動は通常のスクロール ---
+  let tTimer = null, tActive = false, tx0 = 0, ty0 = 0;
+  const touchX = (ev) => {
+    const r = el.getBoundingClientRect();
+    const w = getChart().timeScale().width();
+    return Math.max(0, Math.min(ev.touches[0].clientX - r.left, w));
+  };
+  el.addEventListener('touchstart', (ev) => {
+    if (ev.touches.length !== 1) { clearTimeout(tTimer); return; }
+    const r = el.getBoundingClientRect();
+    const t0 = ev.touches[0];
+    if (t0.clientX - r.left > getChart().timeScale().width()) return;
+    if (t0.clientY - r.top > r.height - 26) return;
+    tx0 = t0.clientX; ty0 = t0.clientY;
+    tActive = false;
+    clearTimeout(tTimer);
+    tTimer = setTimeout(() => {
+      tActive = true;
+      const r2 = el.getBoundingClientRect();
+      startX = Math.max(0, Math.min(tx0 - r2.left, getChart().timeScale().width()));
+      update(startX);
+      if (navigator.vibrate) navigator.vibrate(30);
+    }, 400);
+  }, { capture: true, passive: true });
+  el.addEventListener('touchmove', (ev) => {
+    if (tActive) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      update(touchX(ev));
+      return;
+    }
+    const t0 = ev.touches[0];
+    if (Math.abs(t0.clientX - tx0) > 8 || Math.abs(t0.clientY - ty0) > 8) clearTimeout(tTimer);
+  }, { capture: true, passive: false });
+  const touchEnd = () => {
+    clearTimeout(tTimer);
+    tActive = false;
+    startX = null;
+  };
+  el.addEventListener('touchend', touchEnd, { capture: true, passive: true });
+  el.addEventListener('touchcancel', touchEnd, { capture: true, passive: true });
+  // 長押し時のコンテキストメニュー/選択を抑止
+  el.addEventListener('contextmenu', (ev) => { if (tActive) ev.preventDefault(); });
+  el.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    const r = el.getBoundingClientRect();
+    if (e.clientX - r.left > getChart().timeScale().width()) return; // 価格軸上は除外
+    if (e.clientY - r.top > r.height - 26) return;                   // 時間軸上は除外
+    startX = clampX(e);
+    box.style.display = 'none';
+    const move = (ev) => update(clampX(ev));
+    const up = (ev) => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      if (Math.abs(clampX(ev) - startX) < 3) box.style.display = 'none'; // 単なるクリックは非表示
+      startX = null;
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  });
+}
+
 function initChart() {
   const wrap = document.getElementById('chart-wrap');
   
@@ -1430,7 +1533,7 @@ function initChart() {
       barSpacing:     6,
       rightOffset:    3,
     },
-    handleScroll: { vertTouchDrag: false },
+    handleScroll: { vertTouchDrag: false, pressedMouseMove: false }, // マウスドラッグは本数計測に使用
   };
 
   // --- 日足チャート ---
@@ -1508,6 +1611,10 @@ function initChart() {
     () => [candleSeriesM, closeSeriesM, ...MA_DEFS.map(d => maSeriesM[d.p])],
     'M'
   ));
+
+  setupRangeSelect('chart-daily',   () => chart,  () => candleSeries);
+  setupRangeSelect('chart-weekly',  () => chartW, () => candleSeriesW);
+  setupRangeSelect('chart-monthly', () => chartM, () => candleSeriesM);
 
   /* クロスヘア連動 */
   chart.subscribeCrosshairMove(param => {
