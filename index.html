@@ -145,32 +145,40 @@
     #ma-legend {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 2px 12px;
+      gap: 4px;
+      padding: 1px 8px;
       background: var(--panel);
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      line-height: 1.1;
     }
-    #ma-legend .lbl { font-size: 11px; color: var(--dim); }
+    #ma-legend::-webkit-scrollbar { display: none; }
+    #ma-legend .lbl { font-size: 10px; color: var(--dim); line-height: 1.1; flex-shrink: 0; }
 
     .ma-entry {
       display: flex;
       align-items: center;
-      gap: 5px;
+      gap: 3px;
       cursor: pointer;
-      padding: 2px 5px;
+      padding: 1px 3px;
       border-radius: 3px;
       transition: background 0.12s;
+      flex-shrink: 0;
+      line-height: 1.1;
     }
     .ma-entry:hover { background: var(--hover); }
     .ma-entry.off   { opacity: 0.3; }
 
-    .ma-dash { width: 18px; height: 2px; border-radius: 1px; flex-shrink: 0; }
+    .ma-dash { width: 12px; height: 2px; border-radius: 1px; flex-shrink: 0; }
     .ma-entry span {
-      font-size: 11px;
+      font-size: 10px;
       font-family: 'Roboto Mono', monospace;
       white-space: nowrap;
+      line-height: 1.1;
     }
 
     /* =========================================================
@@ -605,10 +613,13 @@
       .oval { font-size: 11px; }
       .vdiv { display: none; }
 
-      /* MA凡例バーをスクロール可能に */
-      #ma-legend { flex-wrap: nowrap; overflow-x: auto; padding: 4px 8px; gap: 6px; }
+      /* MA凡例バーをスクロール可能＆コンパクトに */
+      #ma-legend { flex-wrap: nowrap; overflow-x: auto; padding: 1px 4px; gap: 2px; }
       #ma-legend::-webkit-scrollbar { display: none; }
-      .ma-entry { padding: 4px 6px; flex-shrink: 0; }
+      #ma-legend .lbl { font-size: 9px; }
+      .ma-entry { padding: 1px 2px; gap: 2px; flex-shrink: 0; }
+      .ma-dash { width: 9px; }
+      .ma-entry span { font-size: 10px; }
 
       /* フッターをモバイル向け2段固定レイアウトに */
       #footer {
@@ -799,19 +810,19 @@
     <span id="ma300t" style="color:var(--ma300)">MA300:---</span>
   </div>
 
-  <div class="vdiv" style="height:14px; margin:0 4px"></div>
+  <div class="vdiv" style="height:10px; margin:0 2px"></div>
   <span class="lbl">表示</span>
 
   <!-- ローソク足 表示/非表示 -->
   <div class="ma-entry" id="tog-candle" onclick="toggleCandle()">
-    <div style="width:14px; height:10px; border:1.5px solid #f23645; background:rgba(242,54,69,0.25); border-radius:1px; flex-shrink:0"></div>
-    <span style="color:var(--text); font-size:11px; font-family:'Roboto Mono',monospace">ローソク</span>
+    <div style="width:10px; height:8px; border:1.5px solid #f23645; background:rgba(242,54,69,0.25); border-radius:1px; flex-shrink:0"></div>
+    <span style="color:var(--text)">ローソク</span>
   </div>
 
   <!-- 終値ライン 表示/非表示 -->
   <div class="ma-entry off" id="tog-close" onclick="toggleClose()">
     <div class="ma-dash" style="background:#9e9e9e"></div>
-    <span id="close-lbl" style="color:#9e9e9e; font-size:11px; font-family:'Roboto Mono',monospace">終値</span>
+    <span id="close-lbl" style="color:#9e9e9e">終値</span>
   </div>
 </div>
 
