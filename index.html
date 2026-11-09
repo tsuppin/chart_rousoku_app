@@ -194,6 +194,11 @@
       /* モバイルでの高さガタつき防止 */
       height: 100%;
     }
+    /* 売買ツールチップ (株数・株価) */
+    #trade-tip { position: fixed; z-index: 50; display: none; pointer-events: none; background: rgba(20,24,38,0.95); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--text); line-height: 1.5; max-width: 240px; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
+    #trade-tip .tt-date { color: var(--dim); font-size: 10px; }
+    #trade-tip .tt-buy { color: #42A5F5; }
+    #trade-tip .tt-sell { color: #E040FB; }
     /* ドラッグ範囲選択 (ローソク足本数) */
     .range-sel { position: absolute; top: 0; bottom: 0; background: rgba(41,98,255,0.18); border-left: 1px solid #2962ff; border-right: 1px solid #2962ff; pointer-events: none; z-index: 5; display: none; }
     .range-sel-lbl { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); background: #2962ff; color: #fff; font-size: 11px; font-family: 'Roboto Mono', monospace; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
@@ -1409,6 +1414,7 @@ function createFineGridPrimitive(getSeriesList, mode) {
 /* ======================================================
    ドラッグで範囲選択 → 期間内のローソク足本数を表示
 ====================================================== */
+let rangeSelecting = false;
 function setupRangeSelect(containerId, getChart, getSeries) {
   const el = document.getElementById(containerId);
   const box = document.createElement('div');
@@ -1493,6 +1499,7 @@ function setupRangeSelect(containerId, getChart, getSeries) {
     if (e.clientX - r.left > getChart().timeScale().width()) return; // 価格軸上は除外
     if (e.clientY - r.top > r.height - 26) return;                   // 時間軸上は除外
     startX = clampX(e);
+    rangeSelecting = true;
     box.style.display = 'none';
     const move = (ev) => update(clampX(ev));
     const up = (ev) => {
@@ -1500,12 +1507,78 @@ function setupRangeSelect(containerId, getChart, getSeries) {
       window.removeEventListener('mouseup', up);
       if (Math.abs(clampX(ev) - startX) < 3) box.style.display = 'none'; // 単なるクリックは非表示
       startX = null;
+      rangeSelecting = false;
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
   });
 }
 
+/* ======================================================
+   売買したローソク足: ホバー(PC)/タップ(スマホ)で株数・株価を表示
+====================================================== */
+let tradeTipTimer = null;
+function tradesForBar(source, timeStr) {
+  const key = (t) => {
+    const s = toDateStr(t);
+    if (source === 'daily') return s;
+    if (source === 'weekly') return getMonday(s);
+    return s.slice(0, 7) + '-01';
+  };
+  return tHistory.filter(h => (!h.code || h.code === currentCode) && key(h.time) === timeStr)
+                 .slice().reverse(); // 古い順
+}
+function hideTradeTip() {
+  clearTimeout(tradeTipTimer);
+  const el = document.getElementById('trade-tip');
+  if (el) el.style.display = 'none';
+}
+function showTradeTip(source, param, containerId, autoHide) {
+  const tip = document.getElementById('trade-tip');
+  if (!param || !param.time || !param.point) { hideTradeTip(); return; }
+  const timeStr = toDateStr(param.time);
+  const trades = tradesForBar(source, timeStr);
+  if (!trades.length) { hideTradeTip(); return; }
+  const rows = trades.map(h => {
+    const cls = h.type.startsWith('買') ? 'tt-buy' : 'tt-sell';
+    const pnl = h.pnl ? ` <span class="${h.pnl > 0 ? 'up-color' : 'down-color'}">(${h.pnl > 0 ? '+' : ''}${h.pnl.toLocaleString()}円)</span>` : '';
+    return `<div><span class="${cls}">${h.type}</span> ${h.qty.toLocaleString()}株 @ ${(+h.price).toLocaleString()}円${pnl}</div>`;
+  }).join('');
+  tip.innerHTML = `<div class="tt-date">${timeStr}</div>${rows}`;
+  tip.style.display = 'block';
+  const r = document.getElementById(containerId).getBoundingClientRect();
+  let x = r.left + param.point.x + 14;
+  let y = r.top + param.point.y + 14;
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  if (x + w > window.innerWidth - 4) x = r.left + param.point.x - w - 14;
+  if (y + h > window.innerHeight - 4) y = r.top + param.point.y - h - 14;
+  tip.style.left = Math.max(4, x) + 'px';
+  tip.style.top = Math.max(4, y) + 'px';
+  clearTimeout(tradeTipTimer);
+  if (autoHide) tradeTipTimer = setTimeout(hideTradeTip, 4000);
+}
+function setupTradeTip() {
+  const tip = document.createElement('div');
+  tip.id = 'trade-tip';
+  document.body.appendChild(tip);
+  const touchOnly = window.matchMedia('(hover: none)').matches;
+  const defs = [
+    ['daily',   () => chart,  'chart-daily'],
+    ['weekly',  () => chartW, 'chart-weekly'],
+    ['monthly', () => chartM, 'chart-monthly'],
+  ];
+  for (const [src, getC, id] of defs) {
+    getC().subscribeCrosshairMove(param => {
+      if (touchOnly) return;                 // スマホはタップで表示
+      if (rangeSelecting) { hideTradeTip(); return; }
+      showTradeTip(src, param, id, false);
+    });
+    getC().subscribeClick(param => {
+      if (!touchOnly) return;
+      showTradeTip(src, param, id, true);    // スマホ: タップで表示 (4秒で自動非表示)
+    });
+  }
+}
 function initChart() {
   const wrap = document.getElementById('chart-wrap');
   
@@ -1615,6 +1688,8 @@ function initChart() {
   setupRangeSelect('chart-daily',   () => chart,  () => candleSeries);
   setupRangeSelect('chart-weekly',  () => chartW, () => candleSeriesW);
   setupRangeSelect('chart-monthly', () => chartM, () => candleSeriesM);
+
+  setupTradeTip();
 
   /* クロスヘア連動 */
   chart.subscribeCrosshairMove(param => {
