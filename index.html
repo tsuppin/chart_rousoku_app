@@ -199,8 +199,9 @@
       min-height: 0;
       overflow: hidden;
       background: var(--bg);
-      /* モバイルでの高さガタつき防止 */
+      /* モバイルでの高さガタつき防止 & タッチ操作のブラウザ遅延抑止 */
       height: 100%;
+      touch-action: none;
     }
     /* 売買ツールチップ (株数・株価) */
     #trade-tip { position: fixed; z-index: 50; display: none; pointer-events: none; background: rgba(20,24,38,0.95); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font-size: 11px; font-family: 'Roboto Mono', monospace; color: var(--text); line-height: 1.5; max-width: 240px; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
@@ -215,6 +216,10 @@
       position: relative;
       min-height: 0;
       width: 100%;
+      touch-action: none;
+    }
+    .btn, .wbtn, .spd-btn, .tp-btn, .tp-arrow, .ma-entry {
+      touch-action: manipulation;
     }
     #chart-daily {
       flex: 1.3;
@@ -848,7 +853,7 @@
       <div class="chart-label">月足</div>
     </div>
     
-    <div id="swipe-hint">← 左スワイプ：前日　右スワイプ：次日 →</div>
+    <div id="swipe-hint">左右スワイプ：過去へ移動 ／ ピンチ・上下スワイプ：拡大縮小</div>
   </div>
 
   <div id="trade-panel">
@@ -1224,10 +1229,15 @@ const maSeriesW  = {};     // 週足MA { period: series }
 const maSeriesM  = {};     // 月足MA { period: series }
 const maVisible  = {};     // { period: bool }
 
-let allCandles = [];       // 全ローソクデータ配列
-let allMAs     = {};       // { period: [{time,value}] }
-let cursor     = 0;        // 現在の最終表示バーのインデックス
-let winSize    = 60;       // 表示バー数
+let allCandles   = [];     // 全ローソクデータ配列
+let allCloses    = [];     // 全終値ラインデータ配列 [{time, value}]
+let candleIdxMap = new Map(); // 日付文字列 -> インデックス
+let allMAs       = {};     // { period: [{time,value}] }
+let curWeekly    = [];     // 現在カーソル時点の週足配列
+let curMonthly   = [];     // 現在カーソル時点の月足配列
+let lastRenderedCursor = -1;
+let cursor       = 0;      // 現在の最終表示バーのインデックス
+let winSize      = 60;     // 表示バー数
 
 let candleVisible = true;  // ローソク足 表示状態
 let closeVisible  = false; // 終値ライン 表示状態
@@ -1236,7 +1246,7 @@ const MIN_BAR_SPACING = 1.5;
 const MAX_BAR_SPACING = 80;
 
 let currentCode = '1801';
-const dataCache = {};      // { code: { candles, mas, info } }
+const dataCache = {};      // { code: { candles, closes, idxMap, mas, info } }
 
 // MA ON/OFF 初期値 (3, 7, 300は初期非表示)
 MA_DEFS.forEach(d => { 
@@ -1246,9 +1256,18 @@ MA_DEFS.forEach(d => {
 /* ======================================================
    チャート初期化
 ====================================================== */
-/** 横軸（日付エリア）の上下余白を詰めて高さをコンパクト化 (28px -> 18px) */
+/** 横軸（日付エリア）の上下余白を詰めて高さをコンパクト化 (28px -> 18px) & スマホ長押しtrackingMode抑止 */
 function compactTimeScale(c) {
   try {
+    // スマホで0.24秒触れた際にLightweight Charts内部のtrackingModeにロックされ横スクロール不能になるのを防止
+    const pws = c?.Ub?.Om;
+    if (Array.isArray(pws)) {
+      for (const pw of pws) {
+        if (pw && typeof pw.Np === 'function') {
+          pw.Np = function () {};
+        }
+      }
+    }
     const taw = c?.Ub?.Um;
     if (!taw || typeof taw.ym !== 'function') return;
     const origYm = taw.ym.bind(taw);
@@ -1314,6 +1333,12 @@ function calcFinePriceStep(high, low, paneHeight) {
 /** 最背面 (zOrder: 'bottom') に細かい水平グリッドのみを1pxで描画する SeriesPrimitive */
 function createFineGridPrimitive(getSeriesList, mode) {
   let chartInst = null;
+  const keyOf = (t) => {
+    const s = toDateStr(t);
+    if (mode === 'D') return getMonday(s);
+    if (mode === 'W') return s.slice(0, 7);
+    return s.slice(0, 4) + 'Q' + Math.floor((parseInt(s.slice(5, 7), 10) - 1) / 3);
+  };
 
   const renderer = {
     draw(target) {
@@ -1363,20 +1388,14 @@ function createFineGridPrimitive(getSeriesList, mode) {
           const ts = chartInst.timeScale();
           const range = ts.getVisibleLogicalRange();
           if (range) {
-            const keyOf = (t) => {
-              const s = toDateStr(t);
-              if (mode === 'D') return getMonday(s);
-              if (mode === 'W') return s.slice(0, 7);
-              return s.slice(0, 4) + 'Q' + Math.floor((parseInt(s.slice(5, 7), 10) - 1) / 3);
-            };
             const from = Math.max(1, Math.floor(range.from));
             const to = Math.min(Math.ceil(range.to), from + 3000);
             let prev = baseSeries.dataByIndex(from - 1, 0);
-            let prevKey = prev ? keyOf(prev.time) : null;
+            let prevKey = prev ? (prev._vkey !== undefined ? prev._vkey : (prev._vkey = keyOf(prev.time))) : null;
             for (let i = from; i <= to; i++) {
               const d = baseSeries.dataByIndex(i, 0);
               if (!d) continue;
-              const k = keyOf(d.time);
+              const k = d._vkey !== undefined ? d._vkey : (d._vkey = keyOf(d.time));
               if (prevKey !== null && k !== prevKey) {
                 const x = ts.logicalToCoordinate(i);
                 if (x !== null && x >= -1 && x <= paneW + 1) vCoords.push(x);
@@ -1423,12 +1442,74 @@ function createFineGridPrimitive(getSeriesList, mode) {
 }
 
 /* ======================================================
-   ドラッグで範囲選択 → 期間内のローソク足本数を表示
+   スワイプ拡大縮小 & ドラッグ範囲選択 (ローソク足本数)
 ====================================================== */
 let rangeSelecting = false;
 const rangeBoxes = [];
 let rangeAutoHideTimer = null;
 let lastRangeTouchTime = 0;
+let isTouchInteracting = false;
+let pinchActive = false;
+let lastPinchEndTime = 0;
+let syncingBarSpacing = false;
+const singleTouchCancelFns = [];
+
+let zoomRafId = null;
+let pendingZoomChart = null;
+let pendingZoomPointX = 0;
+let pendingZoomScale = 0;
+
+/** 指定チャートの座標 pointX を基準に滑らかに拡大縮小し、他チャートの barSpacing も同期 */
+function zoomChartAtPoint(targetChart, pointX, scaleDelta) {
+  if (!targetChart || !scaleDelta) return;
+  const c = targetChart;
+  const curSp = c.timeScale().options().barSpacing || currentBarSpacing;
+  if ((scaleDelta > 0 && curSp >= MAX_BAR_SPACING) || (scaleDelta < 0 && curSp <= MIN_BAR_SPACING)) return;
+
+  syncingBarSpacing = true;
+  try {
+    const model = c?.Ub?.Hi;
+    if (model && typeof model.qc === 'function') {
+      const nextPreview = curSp + scaleDelta * (curSp / 10);
+      let adjScale = scaleDelta;
+      if (nextPreview > MAX_BAR_SPACING) adjScale = (MAX_BAR_SPACING - curSp) / (curSp / 10);
+      else if (nextPreview < MIN_BAR_SPACING) adjScale = (MIN_BAR_SPACING - curSp) / (curSp / 10);
+      if (Math.abs(adjScale) > 1e-4) {
+        model.qc(pointX, adjScale);
+      }
+      const sp = Math.max(MIN_BAR_SPACING, Math.min(MAX_BAR_SPACING, c.timeScale().options().barSpacing || curSp));
+      currentBarSpacing = sp;
+      for (const other of [chart, chartW, chartM]) {
+        if (other && other !== c) {
+          other.timeScale().applyOptions({ barSpacing: sp });
+        }
+      }
+    } else {
+      currentBarSpacing = Math.max(MIN_BAR_SPACING, Math.min(MAX_BAR_SPACING, curSp * (1 + scaleDelta * 0.1)));
+      const opts = { barSpacing: currentBarSpacing };
+      chart?.timeScale().applyOptions(opts);
+      chartW?.timeScale().applyOptions(opts);
+      chartM?.timeScale().applyOptions(opts);
+    }
+  } finally {
+    syncingBarSpacing = false;
+  }
+}
+
+function scheduleZoom(targetChart, pointX, scaleDelta) {
+  pendingZoomChart = targetChart;
+  pendingZoomPointX = pointX;
+  pendingZoomScale += scaleDelta;
+  if (zoomRafId !== null) return;
+  zoomRafId = requestAnimationFrame(() => {
+    zoomRafId = null;
+    const sc = pendingZoomScale;
+    pendingZoomScale = 0;
+    if (Math.abs(sc) > 1e-4) {
+      zoomChartAtPoint(pendingZoomChart, pendingZoomPointX, sc);
+    }
+  });
+}
 
 function hideAllRangeBoxes() {
   clearTimeout(rangeAutoHideTimer);
@@ -1443,6 +1524,85 @@ document.addEventListener('mousedown', (e) => {
   if (Date.now() - lastRangeTouchTime < 500) return;
   if (!e.target.closest('.chart-container')) hideAllRangeBoxes();
 });
+
+/** チャートラッパー全体の2本指ピンチ（スワイプ）拡大縮小（チャート間をまたぐ2本指にも対応） */
+function setupWrapTouchZoom() {
+  const wrap = document.getElementById('chart-wrap');
+  let prevDist = 0;
+  let targetC = null;
+  let anchorX = 0;
+
+  const pickChartAtY = (clientY) => {
+    const pairs = [
+      [chart,  'chart-daily'],
+      [chartW, 'chart-weekly'],
+      [chartM, 'chart-monthly'],
+    ];
+    for (const [c, id] of pairs) {
+      const el = document.getElementById(id);
+      if (!c || !el || el.offsetParent === null) continue;
+      const r = el.getBoundingClientRect();
+      if (clientY >= r.top && clientY <= r.bottom) return [c, r];
+    }
+    const fallbackEl = document.getElementById('chart-daily');
+    return [chart, fallbackEl ? fallbackEl.getBoundingClientRect() : wrap.getBoundingClientRect()];
+  };
+
+  wrap.addEventListener('touchstart', (ev) => {
+    if (ev.touches.length < 2) return;
+    pinchActive = true;
+    isTouchInteracting = true;
+    for (const fn of singleTouchCancelFns) fn();
+    hideAllRangeBoxes();
+    hideTradeTip();
+    const t0 = ev.touches[0], t1 = ev.touches[1];
+    prevDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    const midX = (t0.clientX + t1.clientX) * 0.5;
+    const midY = (t0.clientY + t1.clientY) * 0.5;
+    const [c, r] = pickChartAtY(midY);
+    targetC = c;
+    anchorX = Math.max(1, Math.min(midX - r.left, c ? c.timeScale().width() : r.width));
+  }, { capture: true, passive: true });
+
+  wrap.addEventListener('touchmove', (ev) => {
+    if (!pinchActive) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (ev.touches.length < 2) return;
+    const t0 = ev.touches[0], t1 = ev.touches[1];
+    const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    if (prevDist > 8 && dist > 8) {
+      const midX = (t0.clientX + t1.clientX) * 0.5;
+      const midY = (t0.clientY + t1.clientY) * 0.5;
+      const [c, r] = pickChartAtY(midY);
+      targetC = c || targetC;
+      if (targetC) {
+        anchorX = Math.max(1, Math.min(midX - r.left, targetC.timeScale().width()));
+        const scaleDelta = ((dist / prevDist) - 1) * 10;
+        scheduleZoom(targetC, anchorX, scaleDelta);
+      }
+    }
+    prevDist = dist;
+  }, { capture: true, passive: false });
+
+  const endPinch = (ev) => {
+    if (!pinchActive) return;
+    ev.stopPropagation();
+    if (!ev.touches || ev.touches.length === 0) {
+      lastPinchEndTime = Date.now();
+      pinchActive = false;
+      isTouchInteracting = false;
+      prevDist = 0;
+      rangeSelecting = true;
+      setTimeout(() => { rangeSelecting = false; }, 80);
+    } else if (ev.touches.length < 2) {
+      prevDist = 0;
+    }
+  };
+  wrap.addEventListener('touchend', endPinch, { capture: true, passive: true });
+  wrap.addEventListener('touchcancel', endPinch, { capture: true, passive: true });
+}
+
 function setupRangeSelect(containerId, getChart, getSeries) {
   const el = document.getElementById(containerId);
   const box = document.createElement('div');
@@ -1480,8 +1640,17 @@ function setupRangeSelect(containerId, getChart, getSeries) {
     lbl.textContent = countBars(startX, x) + '本';
   };
 
-  // --- スマホ: 長押し(0.4秒)で範囲選択開始 → そのままドラッグ。長押し前の移動は通常のスクロール ---
-  let tTimer = null, tActive = false, tx0 = 0, ty0 = 0;
+  // --- スマホ1本指: 左右スワイプ=過去チャートへスクロール / 上下スワイプ・日付軸スワイプ=拡大縮小 / 長押し(0.45秒)=本数計測 ---
+  let tTimer = null, gestureMode = null, tx0 = 0, ty0 = 0, prevX = 0, prevY = 0, zoomAnchorX = 0;
+  const cancelSingle = () => {
+    clearTimeout(tTimer);
+    tTimer = null;
+    gestureMode = null;
+    startX = null;
+    lastX = null;
+  };
+  singleTouchCancelFns.push(cancelSingle);
+
   const touchX = (ev) => {
     const r = el.getBoundingClientRect();
     const w = getChart().timeScale().width();
@@ -1491,16 +1660,33 @@ function setupRangeSelect(containerId, getChart, getSeries) {
   el.addEventListener('touchstart', (ev) => {
     lastRangeTouchTime = Date.now();
     hideAllRangeBoxes();
-    if (ev.touches.length !== 1) { clearTimeout(tTimer); return; }
+    if (pinchActive || ev.touches.length !== 1 || Date.now() - lastPinchEndTime < 120) {
+      cancelSingle();
+      return;
+    }
     const r = el.getBoundingClientRect();
     const t0 = ev.touches[0];
-    if (t0.clientX - r.left > getChart().timeScale().width()) return;
-    if (t0.clientY - r.top > r.height - 26) return;
-    tx0 = t0.clientX; ty0 = t0.clientY;
-    tActive = false;
+    const paneW = getChart().timeScale().width();
+    const localX = t0.clientX - r.left;
+    const localY = t0.clientY - r.top;
+    if (localX > paneW) { cancelSingle(); return; }
+    tx0 = prevX = t0.clientX;
+    ty0 = prevY = t0.clientY;
+    zoomAnchorX = Math.max(1, Math.min(localX, paneW));
+    isTouchInteracting = true;
+
+    // 下部の横軸（日付エリア）上のスワイプは左右スワイプで拡大縮小
+    if (localY >= r.height - 28) {
+      clearTimeout(tTimer);
+      gestureMode = 'hzoom';
+      return;
+    }
+
+    gestureMode = null;
     clearTimeout(tTimer);
     tTimer = setTimeout(() => {
-      tActive = true;
+      if (pinchActive || gestureMode !== null) return;
+      gestureMode = 'range';
       rangeSelecting = true;
       hideTradeTip();
       const r2 = el.getBoundingClientRect();
@@ -1508,27 +1694,73 @@ function setupRangeSelect(containerId, getChart, getSeries) {
       lastX = startX;
       update(startX);
       if (navigator.vibrate) navigator.vibrate(30);
-    }, 400);
+    }, 450);
   }, { capture: true, passive: true });
+
   el.addEventListener('touchmove', (ev) => {
     lastRangeTouchTime = Date.now();
-    if (tActive) {
+    if (pinchActive || ev.touches.length !== 1) {
+      cancelSingle();
+      return;
+    }
+    const t0 = ev.touches[0];
+    const dx = t0.clientX - tx0;
+    const dy = t0.clientY - ty0;
+
+    if (gestureMode === 'range') {
       ev.preventDefault();
       ev.stopPropagation();
       lastX = touchX(ev);
       update(lastX);
       return;
     }
-    const t0 = ev.touches[0];
-    if (Math.abs(t0.clientX - tx0) > 8 || Math.abs(t0.clientY - ty0) > 8) {
-      clearTimeout(tTimer);
-      hideAllRangeBoxes();
+
+    if (gestureMode === 'hzoom') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const stepDx = t0.clientX - prevX;
+      prevX = t0.clientX;
+      if (Math.abs(stepDx) > 0.2) {
+        scheduleZoom(getChart(), zoomAnchorX, stepDx * 0.08);
+      }
+      return;
+    }
+
+    if (gestureMode === null) {
+      if (Math.hypot(dx, dy) > 6) {
+        clearTimeout(tTimer);
+        tTimer = null;
+        hideAllRangeBoxes();
+        if (Math.abs(dy) > Math.abs(dx) * 1.35) {
+          // 上下スワイプ → チャート拡大縮小
+          gestureMode = 'vzoom';
+          prevY = t0.clientY;
+        } else {
+          // 左右スワイプ → 過去のチャートへスムーズに横スクロール
+          gestureMode = 'scroll';
+        }
+      }
+    }
+
+    if (gestureMode === 'vzoom') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const stepDy = prevY - t0.clientY; // 上スワイプ(+)で拡大、下スワイプ(-)で縮小
+      prevY = t0.clientY;
+      if (Math.abs(stepDy) > 0.2) {
+        scheduleZoom(getChart(), zoomAnchorX, stepDy * 0.08);
+      }
     }
   }, { capture: true, passive: false });
+
   const touchEnd = (ev) => {
     lastRangeTouchTime = Date.now();
     clearTimeout(tTimer);
-    if (tActive) {
+    tTimer = null;
+    if (!ev.touches || ev.touches.length === 0) {
+      isTouchInteracting = false;
+    }
+    if (gestureMode === 'range') {
       if (ev && ev.type === 'touchend') lastX = touchX(ev);
       if (startX === null || lastX === null || Math.abs(lastX - startX) < 3) {
         hideAllRangeBoxes();
@@ -1537,15 +1769,18 @@ function setupRangeSelect(containerId, getChart, getSeries) {
         rangeAutoHideTimer = setTimeout(hideAllRangeBoxes, 2500);
       }
       setTimeout(() => { rangeSelecting = false; }, 50);
+    } else if (gestureMode === 'vzoom' || gestureMode === 'hzoom') {
+      rangeSelecting = true;
+      setTimeout(() => { rangeSelecting = false; }, 50);
     }
-    tActive = false;
+    gestureMode = null;
     startX = null;
     lastX = null;
   };
   el.addEventListener('touchend', touchEnd, { capture: true, passive: true });
   el.addEventListener('touchcancel', touchEnd, { capture: true, passive: true });
   // 長押し時のコンテキストメニュー/選択を抑止
-  el.addEventListener('contextmenu', (ev) => { if (tActive) ev.preventDefault(); });
+  el.addEventListener('contextmenu', (ev) => { if (gestureMode === 'range') ev.preventDefault(); });
   el.addEventListener('wheel', hideAllRangeBoxes, { passive: true });
   el.addEventListener('mousedown', (e) => {
     if (Date.now() - lastRangeTouchTime < 500) return;
@@ -1630,7 +1865,7 @@ function setupTradeTip() {
     });
     getC().subscribeClick(param => {
       if (!touchOnly) return;
-      if (rangeSelecting) return;
+      if (rangeSelecting || pinchActive) return;
       showTradeTip(src, param, id, true);    // スマホ: タップで表示 (4秒で自動非表示)
     });
   }
@@ -1654,7 +1889,7 @@ function initChart() {
       vertLine: { color: '#4a5070', labelBackgroundColor: '#2962ff', style: 2 },
       horzLine: { color: '#4a5070', labelBackgroundColor: '#2962ff', style: 2 },
     },
-    rightPriceScale: { borderColor: '#2a2e42' },
+    rightPriceScale: { borderColor: '#2a2e42', autoScale: true },
     timeScale: {
       borderColor:    '#2a2e42',
       timeVisible:    true,
@@ -1662,7 +1897,31 @@ function initChart() {
       barSpacing:     6,
       rightOffset:    3,
     },
-    handleScroll: { vertTouchDrag: false, pressedMouseMove: false }, // マウスドラッグは本数計測に使用
+    kineticScroll: {
+      touch: true,
+      mouse: true,
+    },
+    trackingMode: {
+      exitMode: 0, // OnTouchEnd
+    },
+    handleScroll: {
+      mouseWheel: true,
+      pressedMouseMove: false, // PCマウスドラッグは本数計測に使用
+      horzTouchDrag: true,     // スマホ左右スワイプで過去チャートへスムーズにスクロール
+      vertTouchDrag: false,
+    },
+    handleScale: {
+      axisPressedMouseMove: {
+        time: true,
+        price: false, // 右価格軸の誤タッチでautoScaleが外れるのを防止
+      },
+      axisDoubleClickReset: {
+        time: true,
+        price: true,
+      },
+      mouseWheel: true,
+      pinch: false, // #chart-wrap の統合ピンチズームで3チャート滑らかに制御
+    },
   };
 
   // --- 日足チャート ---
@@ -1711,6 +1970,24 @@ function initChart() {
   compactTimeScale(chartW);
   compactTimeScale(chartM);
 
+  // PCホイールや時間軸ドラッグによるbarSpacing変更を3チャート間で同期
+  for (const c of [chart, chartW, chartM]) {
+    c.timeScale().subscribeVisibleLogicalRangeChange(() => {
+      if (syncingBarSpacing) return;
+      const sp = c.timeScale().options().barSpacing;
+      if (sp && Math.abs(sp - currentBarSpacing) > 0.02) {
+        syncingBarSpacing = true;
+        currentBarSpacing = Math.max(MIN_BAR_SPACING, Math.min(MAX_BAR_SPACING, sp));
+        for (const other of [chart, chartW, chartM]) {
+          if (other && other !== c) {
+            other.timeScale().applyOptions({ barSpacing: currentBarSpacing });
+          }
+        }
+        syncingBarSpacing = false;
+      }
+    });
+  }
+
   // --- MAシリーズ作成 (日足・週足・月足共通) ---
   for (const d of MA_DEFS) {
     const opts = {
@@ -1741,6 +2018,7 @@ function initChart() {
     'M'
   ));
 
+  setupWrapTouchZoom();
   setupRangeSelect('chart-daily',   () => chart,  () => candleSeries);
   setupRangeSelect('chart-weekly',  () => chartW, () => candleSeriesW);
   setupRangeSelect('chart-monthly', () => chartM, () => candleSeriesM);
@@ -1816,13 +2094,18 @@ function toggleChartView(k) {
   applyViewMode(next);
 }
 
-/** 日付から月曜日(週の開始日)を取得 */
+/** 日付から月曜日(週の開始日)を取得 (キャッシュ付きで高速化) */
+const mondayCache = Object.create(null);
 function getMonday(dateStr) {
   const str = toDateStr(dateStr);
+  const cached = mondayCache[str];
+  if (cached) return cached;
   const d = new Date(str);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff)).toISOString().slice(0, 10);
+  const res = new Date(d.setDate(diff)).toISOString().slice(0, 10);
+  mondayCache[str] = res;
+  return res;
 }
 
 /** 指定カーソル時点までの週足データを生成（進行中の週も含む） */
@@ -1832,14 +2115,14 @@ function calcWeeklyData(dailyCandles, endIdx) {
 
   for (let i = 0; i <= endIdx; i++) {
     const d = dailyCandles[i];
-    const monday = getMonday(d.time);
+    const monday = d._monday || (d._monday = getMonday(d.time));
 
     if (!currentW || currentW.time !== monday) {
       if (currentW) weekly.push(currentW);
       currentW = { time: monday, open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume };
     } else {
-      currentW.high = Math.max(currentW.high, d.high);
-      currentW.low = Math.min(currentW.low, d.low);
+      if (d.high > currentW.high) currentW.high = d.high;
+      if (d.low < currentW.low) currentW.low = d.low;
       currentW.close = d.close;
       currentW.volume += d.volume;
     }
@@ -1855,16 +2138,14 @@ function calcMonthlyData(dailyCandles, endIdx) {
 
   for (let i = 0; i <= endIdx; i++) {
     const d = dailyCandles[i];
-    const dateStr = toDateStr(d.time);
-    // 月初日 (YYYY-MM-01) をキーにする
-    const monthKey = dateStr.slice(0, 7) + '-01';
+    const monthKey = d._month || (d._month = toDateStr(d.time).slice(0, 7) + '-01');
 
     if (!currentM || currentM.time !== monthKey) {
       if (currentM) monthly.push(currentM);
       currentM = { time: monthKey, open: d.open, high: d.high, low: d.low, close: d.close, volume: d.volume };
     } else {
-      currentM.high = Math.max(currentM.high, d.high);
-      currentM.low = Math.min(currentM.low, d.low);
+      if (d.high > currentM.high) currentM.high = d.high;
+      if (d.low < currentM.low) currentM.low = d.low;
       currentM.close = d.close;
       currentM.volume += d.volume;
     }
@@ -1874,54 +2155,90 @@ function calcMonthlyData(dailyCandles, endIdx) {
 }
 
 /* ======================================================
-   クロスヘア: ツールチップ更新
+   クロスヘア: ツールチップ更新 (rAFスロットリング & O(1)検索)
 ====================================================== */
-function onCrosshair(param, source) {
-  if (!param || !param.time) {
-    if (source === 'daily') showBarInfo(cursor);
-    return;
-  }
-  
-  const targetSeries = source === 'daily' ? candleSeries : (source === 'weekly' ? candleSeriesW : candleSeriesM);
-  const cd = param.seriesData.get(targetSeries);
-  
-  if (cd && source === 'daily') {
-    const tStr = toDateStr(cd.time || param.time);
-    const idx = allCandles.findIndex(x => toDateStr(x.time) === tStr);
-    if (idx >= 0) displayOHLC(allCandles[idx]);
-  }
+let crosshairRafId = null;
+let pendingCrosshairParam = null;
+let pendingCrosshairSource = null;
+let lastCrosshairKey = '';
+const lastMATextCache = Object.create(null);
 
-  const targetMAs = source === 'daily' ? maSeries : (source === 'weekly' ? maSeriesW : maSeriesM);
-  for (const d of MA_DEFS) {
-    const mv = param.seriesData.get(targetMAs[d.p]);
-    setMAText(d.p, mv ? mv.value : null);
-  }
+function onCrosshair(param, source) {
+  pendingCrosshairParam = param;
+  pendingCrosshairSource = source;
+  if (crosshairRafId !== null) return;
+  crosshairRafId = requestAnimationFrame(() => {
+    crosshairRafId = null;
+    const p = pendingCrosshairParam;
+    const src = pendingCrosshairSource;
+    if (!p || !p.time) {
+      if (src === 'daily' && lastCrosshairKey !== 'cursor_' + cursor) {
+        lastCrosshairKey = 'cursor_' + cursor;
+        showBarInfo(cursor);
+      }
+      return;
+    }
+    const tStr = toDateStr(p.time);
+    const key = src + '_' + tStr;
+    if (key === lastCrosshairKey) return;
+    lastCrosshairKey = key;
+
+    if (src === 'daily') {
+      const idx = candleIdxMap.get(tStr);
+      if (idx !== undefined && allCandles[idx]) {
+        displayOHLC(allCandles[idx], idx);
+        for (const d of MA_DEFS) {
+          const arr = allMAs[d.p];
+          setMAText(d.p, (arr && arr[idx]) ? arr[idx].value : null);
+        }
+      }
+      return;
+    }
+
+    const targetMAs = src === 'weekly' ? maSeriesW : maSeriesM;
+    for (const d of MA_DEFS) {
+      const mv = p.seriesData ? p.seriesData.get(targetMAs[d.p]) : null;
+      setMAText(d.p, mv ? mv.value : null);
+    }
+  });
 }
 
 function setMAText(period, val) {
+  const txt = val != null ? `MA${period}:${(+val).toFixed(1)}` : `MA${period}:---`;
+  if (lastMATextCache[period] === txt) return;
+  lastMATextCache[period] = txt;
   const el = document.getElementById(`ma${period}t`);
-  if (!el) return;
-  el.textContent = val != null
-    ? `MA${period}:${(+val).toFixed(1)}`
-    : `MA${period}:---`;
+  if (el) el.textContent = txt;
 }
 
 /* ======================================================
    MA計算（スライディングウィンドウ）
 ====================================================== */
 function calcMA(candles, period) {
-  const out = [];
+  const out = new Array(candles.length);
   let sum = 0;
   for (let i = 0; i < candles.length; i++) {
     sum += candles[i].close;
     if (i >= period) sum -= candles[i - period].close;
     const count = Math.min(i + 1, period);
-    out.push({
+    out[i] = {
       time:  candles[i].time,
       value: Math.round(sum / count * 10) / 10,
-    });
+    };
   }
   return out;
+}
+
+/** 配列末尾の1バー分のMA値をO(period)で算出 */
+function calcLastMA(candles, period) {
+  const n = candles.length;
+  const start = Math.max(0, n - period);
+  let sum = 0;
+  for (let i = start; i < n; i++) sum += candles[i].close;
+  return {
+    time:  candles[n - 1].time,
+    value: Math.round(sum / (n - start) * 10) / 10,
+  };
 }
 
 /* ======================================================
@@ -1946,12 +2263,25 @@ async function loadData(code) {
       }
       
       const candles = json.candles;
+      const closes = new Array(candles.length);
+      const idxMap = new Map();
+      for (let i = 0; i < candles.length; i++) {
+        const c = candles[i];
+        const s = toDateStr(c.time);
+        c._idx = i;
+        c._monday = getMonday(s);
+        c._month = s.slice(0, 7) + '-01';
+        c._vkey = c._monday;
+        closes[i] = { time: c.time, value: c.close };
+        idxMap.set(s, i);
+      }
+
       const mas = {};
       for (const d of MA_DEFS) {
         mas[d.p] = calcMA(candles, d.p);
       }
 
-      dataCache[code] = { candles, mas, info: json };
+      dataCache[code] = { candles, closes, idxMap, mas, info: json };
       document.head.removeChild(script); // 読み込み後はスクリプトタグを削除
       resolve(dataCache[code]);
     };
@@ -1980,14 +2310,16 @@ async function switchStock(code) {
 
   try {
     const data = await loadData(code);
-    allCandles  = data.candles;
-    allMAs      = data.mas;
+    allCandles   = data.candles;
+    allCloses    = data.closes;
+    candleIdxMap = data.idxMap;
+    allMAs       = data.mas;
 
     // 最古のバー（表示窓を満たす位置）を初期カーソルに
     cursor = Math.min(winSize - 1, allCandles.length - 1);
 
-    // トレード状態のリセット
-    if (typeof resetTradeState === 'function') resetTradeState();
+    // トレード状態のリセット (直後に refreshChart するため内部 refresh はスキップ)
+    if (typeof resetTradeState === 'function') resetTradeState(true);
     if (typeof resetCandleCount === 'function') resetCandleCount();
 
     // 全データをセット
@@ -2007,7 +2339,7 @@ async function switchStock(code) {
 }
 
 /* ======================================================
-   チャートデータ全更新（goPrev や初期ロード時）
+   チャートデータ更新（全更新 / 1日進む差分 / 1日戻る差分）
 ====================================================== */
 function refreshChart() {
   hideAllRangeBoxes();
@@ -2015,35 +2347,164 @@ function refreshChart() {
   
   const slicedD = allCandles.slice(0, cursor + 1);
   candleSeries.setData(slicedD);
-  closeSeries.setData(slicedD.map(c => ({ time: c.time, value: c.close })));
+  if (closeVisible) closeSeries.setData(allCloses.slice(0, cursor + 1));
 
-  // 日足MA
+  // 日足MA (表示中のシリーズのみセットして高速化)
   for (const d of MA_DEFS) {
-    maSeries[d.p].setData(allMAs[d.p].slice(0, cursor + 1));
+    if (maVisible[d.p]) maSeries[d.p].setData(allMAs[d.p].slice(0, cursor + 1));
   }
 
   // 週足計算 & セット
-  const weekly = calcWeeklyData(allCandles, cursor);
-  candleSeriesW.setData(weekly);
-  closeSeriesW.setData(weekly.map(c => ({ time: c.time, value: c.close })));
+  curWeekly = calcWeeklyData(allCandles, cursor);
+  candleSeriesW.setData(curWeekly);
+  if (closeVisible) closeSeriesW.setData(curWeekly.map(c => ({ time: c.time, value: c.close })));
 
-  // 週足MA (その場計算)
+  // 週足MA
   for (const d of MA_DEFS) {
-    const wMA = calcMA(weekly, d.p);
-    maSeriesW[d.p].setData(wMA);
+    if (maVisible[d.p]) maSeriesW[d.p].setData(calcMA(curWeekly, d.p));
   }
 
   // 月足計算 & セット
-  const monthly = calcMonthlyData(allCandles, cursor);
-  candleSeriesM.setData(monthly);
-  closeSeriesM.setData(monthly.map(c => ({ time: c.time, value: c.close })));
+  curMonthly = calcMonthlyData(allCandles, cursor);
+  candleSeriesM.setData(curMonthly);
+  if (closeVisible) closeSeriesM.setData(curMonthly.map(c => ({ time: c.time, value: c.close })));
 
-  // 月足MA (その場計算)
+  // 月足MA
   for (const d of MA_DEFS) {
-    const mMA = calcMA(monthly, d.p);
-    maSeriesM[d.p].setData(mMA);
+    if (maVisible[d.p]) maSeriesM[d.p].setData(calcMA(curMonthly, d.p));
   }
-  // ※ ここで updateVisibleRange() を呼ばないことでズームを保持
+
+  lastRenderedCursor = cursor;
+}
+
+/** 1日進む際のO(1)差分更新 */
+function stepForwardChart() {
+  if (!allCandles.length || cursor !== lastRenderedCursor + 1 || !curWeekly.length || !curMonthly.length) {
+    refreshChart();
+    return;
+  }
+  hideAllRangeBoxes();
+  const c = allCandles[cursor];
+  candleSeries.update(c);
+  if (closeVisible) closeSeries.update(allCloses[cursor]);
+  for (const d of MA_DEFS) {
+    if (maVisible[d.p]) maSeries[d.p].update(allMAs[d.p][cursor]);
+  }
+
+  // 週足差分更新
+  const monday = c._monday || (c._monday = getMonday(c.time));
+  let lastW = curWeekly[curWeekly.length - 1];
+  if (lastW && lastW.time === monday) {
+    if (c.high > lastW.high) lastW.high = c.high;
+    if (c.low < lastW.low) lastW.low = c.low;
+    lastW.close = c.close;
+    lastW.volume += c.volume;
+  } else {
+    lastW = { time: monday, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
+    curWeekly.push(lastW);
+  }
+  candleSeriesW.update(lastW);
+  if (closeVisible) closeSeriesW.update({ time: lastW.time, value: lastW.close });
+  for (const d of MA_DEFS) {
+    if (maVisible[d.p]) maSeriesW[d.p].update(calcLastMA(curWeekly, d.p));
+  }
+
+  // 月足差分更新
+  const monthKey = c._month || (c._month = toDateStr(c.time).slice(0, 7) + '-01');
+  let lastM = curMonthly[curMonthly.length - 1];
+  if (lastM && lastM.time === monthKey) {
+    if (c.high > lastM.high) lastM.high = c.high;
+    if (c.low < lastM.low) lastM.low = c.low;
+    lastM.close = c.close;
+    lastM.volume += c.volume;
+  } else {
+    lastM = { time: monthKey, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
+    curMonthly.push(lastM);
+  }
+  candleSeriesM.update(lastM);
+  if (closeVisible) closeSeriesM.update({ time: lastM.time, value: lastM.close });
+  for (const d of MA_DEFS) {
+    if (maVisible[d.p]) maSeriesM[d.p].update(calcLastMA(curMonthly, d.p));
+  }
+
+  lastRenderedCursor = cursor;
+}
+
+/** 1日戻る際の高速更新（同一週・同一月内なら週足・月足は末尾バーのみ update） */
+function stepBackwardChart() {
+  if (!allCandles.length || cursor !== lastRenderedCursor - 1 || !curWeekly.length || !curMonthly.length) {
+    refreshChart();
+    return;
+  }
+  hideAllRangeBoxes();
+  const c = allCandles[cursor];
+  const removed = allCandles[cursor + 1];
+
+  candleSeries.setData(allCandles.slice(0, cursor + 1));
+  if (closeVisible) closeSeries.setData(allCloses.slice(0, cursor + 1));
+  for (const d of MA_DEFS) {
+    if (maVisible[d.p]) maSeries[d.p].setData(allMAs[d.p].slice(0, cursor + 1));
+  }
+
+  // 週足
+  const monday = c._monday || (c._monday = getMonday(c.time));
+  const remMonday = removed._monday || (removed._monday = getMonday(removed.time));
+  if (monday === remMonday && curWeekly.length > 0) {
+    let ws = cursor;
+    while (ws > 0 && (allCandles[ws - 1]._monday || getMonday(allCandles[ws - 1].time)) === monday) ws--;
+    const firstD = allCandles[ws];
+    const lastW = { time: monday, open: firstD.open, high: firstD.high, low: firstD.low, close: c.close, volume: 0 };
+    for (let i = ws; i <= cursor; i++) {
+      const d = allCandles[i];
+      if (d.high > lastW.high) lastW.high = d.high;
+      if (d.low < lastW.low) lastW.low = d.low;
+      lastW.volume += d.volume;
+    }
+    curWeekly[curWeekly.length - 1] = lastW;
+    candleSeriesW.update(lastW);
+    if (closeVisible) closeSeriesW.update({ time: lastW.time, value: lastW.close });
+    for (const d of MA_DEFS) {
+      if (maVisible[d.p]) maSeriesW[d.p].update(calcLastMA(curWeekly, d.p));
+    }
+  } else {
+    curWeekly.pop();
+    candleSeriesW.setData(curWeekly);
+    if (closeVisible) closeSeriesW.setData(curWeekly.map(x => ({ time: x.time, value: x.close })));
+    for (const d of MA_DEFS) {
+      if (maVisible[d.p]) maSeriesW[d.p].setData(calcMA(curWeekly, d.p));
+    }
+  }
+
+  // 月足
+  const monthKey = c._month || (c._month = toDateStr(c.time).slice(0, 7) + '-01');
+  const remMonth = removed._month || (removed._month = toDateStr(removed.time).slice(0, 7) + '-01');
+  if (monthKey === remMonth && curMonthly.length > 0) {
+    let ms = cursor;
+    while (ms > 0 && (allCandles[ms - 1]._month || (toDateStr(allCandles[ms - 1].time).slice(0, 7) + '-01')) === monthKey) ms--;
+    const firstD = allCandles[ms];
+    const lastM = { time: monthKey, open: firstD.open, high: firstD.high, low: firstD.low, close: c.close, volume: 0 };
+    for (let i = ms; i <= cursor; i++) {
+      const d = allCandles[i];
+      if (d.high > lastM.high) lastM.high = d.high;
+      if (d.low < lastM.low) lastM.low = d.low;
+      lastM.volume += d.volume;
+    }
+    curMonthly[curMonthly.length - 1] = lastM;
+    candleSeriesM.update(lastM);
+    if (closeVisible) closeSeriesM.update({ time: lastM.time, value: lastM.close });
+    for (const d of MA_DEFS) {
+      if (maVisible[d.p]) maSeriesM[d.p].update(calcLastMA(curMonthly, d.p));
+    }
+  } else {
+    curMonthly.pop();
+    candleSeriesM.setData(curMonthly);
+    if (closeVisible) closeSeriesM.setData(curMonthly.map(x => ({ time: x.time, value: x.close })));
+    for (const d of MA_DEFS) {
+      if (maVisible[d.p]) maSeriesM[d.p].setData(calcMA(curMonthly, d.p));
+    }
+  }
+
+  lastRenderedCursor = cursor;
 }
 
 /* ======================================================
@@ -2074,9 +2535,11 @@ function updateVisibleRange() {
       rightOffset: 3,
     };
     
+    syncingBarSpacing = true;
     chart.timeScale().applyOptions(timeOptions);
     chartW.timeScale().applyOptions(timeOptions);
     chartM.timeScale().applyOptions(timeOptions);
+    syncingBarSpacing = false;
     
     chart.timeScale().setVisibleRange(range);
 
@@ -2086,7 +2549,9 @@ function updateVisibleRange() {
       chartM.timeScale().scrollToPosition(0, false);
     }, 0);
 
-  } catch (_) { }
+  } catch (_) {
+    syncingBarSpacing = false;
+  }
 }
 
 /** ズームを保持したまま最新バーを画面右端にスクロール */
@@ -2106,17 +2571,17 @@ function scrollKeepZoom() {
 function goNext() {
   if (!allCandles.length || cursor >= allCandles.length - 1) return;
   cursor++;
-  refreshChart(); // 週足連動のため一括更新
   executePending(cursor); // 翌日寄付約定モードの注文をこのバーの始値で約定
+  stepForwardChart();     // O(1)差分更新
   scrollKeepZoom();
   showBarInfo(cursor);
 }
 
-/** 1日戻る（ズーム保持） */
+/** 1日戻る（高速差分更新、ズーム保持） */
 function goPrev() {
   if (!allCandles.length || cursor <= 0) return;
   cursor--;
-  refreshChart();
+  stepBackwardChart();
   scrollKeepZoom();
   showBarInfo(cursor);
 }
@@ -2147,27 +2612,42 @@ function setWindow(size) {
 ====================================================== */
 function zoomIn() {
   hideAllRangeBoxes();
+  const paneW = chart ? chart.timeScale().width() : 200;
+  // 過去チャートへスクロール中は現在見ている画面中央を基準にズームし、位置飛びを防止
+  if (chart && chart.timeScale().scrollPosition() < -1) {
+    zoomChartAtPoint(chart, paneW * 0.5, 1.5);
+    return;
+  }
+  syncingBarSpacing = true;
   currentBarSpacing = Math.min(currentBarSpacing * 1.15, MAX_BAR_SPACING);
   const options = { barSpacing: currentBarSpacing };
   chart.timeScale().applyOptions(options);
   chartW.timeScale().applyOptions(options);
   chartM.timeScale().applyOptions(options);
+  syncingBarSpacing = false;
   scrollKeepZoom();
 }
  
 function zoomOut() {
   hideAllRangeBoxes();
+  const paneW = chart ? chart.timeScale().width() : 200;
+  if (chart && chart.timeScale().scrollPosition() < -1) {
+    zoomChartAtPoint(chart, paneW * 0.5, -1.3);
+    return;
+  }
+  syncingBarSpacing = true;
   currentBarSpacing = Math.max(currentBarSpacing / 1.15, MIN_BAR_SPACING);
   const options = { barSpacing: currentBarSpacing };
   chart.timeScale().applyOptions(options);
   chartW.timeScale().applyOptions(options);
   chartM.timeScale().applyOptions(options);
+  syncingBarSpacing = false;
   scrollKeepZoom();
 }
 
-function displayOHLC(c) {
-  // 前日終値で騰落計算
-  const idx       = allCandles.findIndex(x => x.time === c.time);
+function displayOHLC(c, knownIdx) {
+  // 前日終値で騰落計算 (O(1)インデックス参照)
+  const idx       = knownIdx !== undefined ? knownIdx : (c._idx !== undefined ? c._idx : candleIdxMap.get(toDateStr(c.time)) ?? 0);
   const prevClose = idx > 0 ? allCandles[idx - 1].close : c.close;
   const change    = c.close - prevClose;
   const pct       = prevClose ? (change / prevClose * 100) : 0;
@@ -2199,7 +2679,7 @@ function showBarInfo(idx) {
   const c = allCandles[idx];
   if (!c) return;
 
-  displayOHLC(c);
+  displayOHLC(c, idx);
   document.getElementById('date-badge').textContent = toYYMMDD(c.time);
 
   // MA凡例の値更新
@@ -2261,6 +2741,11 @@ function setLoading(show, msg = '') {
 ====================================================== */
 function toggleMA(period) {
   maVisible[period] = !maVisible[period];
+  if (maVisible[period] && allCandles.length) {
+    maSeries[period].setData(allMAs[period].slice(0, cursor + 1));
+    maSeriesW[period].setData(calcMA(curWeekly, period));
+    maSeriesM[period].setData(calcMA(curMonthly, period));
+  }
   maSeries[period].applyOptions({ visible: maVisible[period] });
   maSeriesW[period].applyOptions({ visible: maVisible[period] });
   maSeriesM[period].applyOptions({ visible: maVisible[period] });
@@ -2279,6 +2764,11 @@ function toggleCandle() {
 /** 終値ライン（白）表示/非表示 */
 function toggleClose() {
   closeVisible = !closeVisible;
+  if (closeVisible && allCandles.length) {
+    closeSeries.setData(allCloses.slice(0, cursor + 1));
+    closeSeriesW.setData(curWeekly.map(c => ({ time: c.time, value: c.close })));
+    closeSeriesM.setData(curMonthly.map(c => ({ time: c.time, value: c.close })));
+  }
   closeSeries.applyOptions({ visible: closeVisible });
   closeSeriesW.applyOptions({ visible: closeVisible });
   closeSeriesM.applyOptions({ visible: closeVisible });
@@ -2747,7 +3237,7 @@ function addHistory(time, type, qty, price, pnl, entry, closedLots = null, candl
   });
 }
 
-function resetTradeState() {
+function resetTradeState(skipRefresh = false) {
   tLotsSell = []; tLotsBuy = [];
   tPending = [];
   tRealizedPnL = 0;
@@ -2761,7 +3251,7 @@ function resetTradeState() {
         delete allCandles[i].borderColor;
       }
     }
-    refreshChart();
+    if (!skipRefresh) refreshChart();
   }
   
   updateTradePanel();
@@ -2932,47 +3422,58 @@ function copyHistoryAI() {
 }
 
 /* ======================================================
-   タッチスワイプ（モバイル対応）
+   モバイル対応（前日/次日ボタン長押し連続めくり ＆ スワイプヒント）
 ====================================================== */
 (function() {
-  const wrap = document.getElementById('chart-wrap');
-  let touchStartX = 0;
-  let touchStartY = 0;
-  let touchStartTime = 0;
-  const SWIPE_MIN_X   = 40;  // px: 最小水平移動量
-  const SWIPE_MAX_Y   = 60;  // px: 縦方向の許容誤差
-  const SWIPE_MAX_MS  = 400; // ms: 最大所要時間
+  // 前日・次日ボタンの長押し連続ステップ（スマホ・PC共通）
+  function setupHoldButton(btnId, stepFn) {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    let holdTimer = null;
+    let repeatTimer = null;
+    let didRepeat = false;
 
-  wrap.addEventListener('touchstart', e => {
-    touchStartX    = e.touches[0].clientX;
-    touchStartY    = e.touches[0].clientY;
-    touchStartTime = Date.now();
-  }, { passive: true });
+    const stopHold = () => {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      if (repeatTimer) { clearInterval(repeatTimer); repeatTimer = null; }
+    };
 
-  wrap.addEventListener('touchend', e => {
-    if (rangeSelecting) return;
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    const dy = e.changedTouches[0].clientY - touchStartY;
-    const dt = Date.now() - touchStartTime;
-
-    if (dt > SWIPE_MAX_MS) return;       // 遅すぎるタッチは無視
-    if (Math.abs(dx) < SWIPE_MIN_X) return; // 移動量不足
-    if (Math.abs(dy) > SWIPE_MAX_Y) return; // 縦スクロールは無視
-
-    if (dx < 0) {
-      // 左スワイプ → 次日
+    const startHold = (e) => {
+      if (e.type === 'mousedown' && e.button !== 0) return;
       stopAuto();
-      goNext();
-    } else {
-      // 右スワイプ → 前日
-      stopAuto();
-      goPrev();
-    }
-  }, { passive: true });
+      stopHold();
+      didRepeat = false;
+      holdTimer = setTimeout(() => {
+        didRepeat = true;
+        stepFn();
+        repeatTimer = setInterval(() => {
+          if (btn.disabled) { stopHold(); return; }
+          stepFn();
+        }, 55);
+      }, 320);
+    };
 
-  // 初回起動時にヒントを表示して3秒後に隐す
+    btn.addEventListener('touchstart', startHold, { passive: true });
+    btn.addEventListener('touchend', stopHold, { passive: true });
+    btn.addEventListener('touchcancel', stopHold, { passive: true });
+    btn.addEventListener('mousedown', startHold);
+    window.addEventListener('mouseup', stopHold);
+    btn.addEventListener('mouseleave', stopHold);
+    btn.addEventListener('click', e => {
+      if (didRepeat) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        didRepeat = false;
+      }
+    }, true);
+  }
+
+  setupHoldButton('btn-prev', goPrev);
+  setupHoldButton('btn-next', goNext);
+
+  // 初回起動時にヒントを表示して3.5秒後に隠す
   const hint = document.getElementById('swipe-hint');
-  setTimeout(() => hint.classList.add('hidden'), 3000);
+  if (hint) setTimeout(() => hint.classList.add('hidden'), 3500);
 })();
 
 /* ======================================================
