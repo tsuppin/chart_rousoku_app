@@ -263,6 +263,7 @@
 
     .tp-section { padding: 8px 12px; border-bottom: 1px solid var(--border); }
     .tp-row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; }
+    .tp-row:last-child { margin-bottom: 0; }
     .tp-lbl { font-size: 11px; color: var(--dim); }
     .tp-val { font-size: 14px; font-weight: 700; font-family: 'Roboto Mono', monospace; }
     .tp-val.profit { color: var(--up); }
@@ -276,8 +277,6 @@
       height: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1;
     }
     .tp-btn:hover { background: var(--active); border-color: var(--accent); }
-    .tp-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
-    .tp-val.counting { color: #FFD54F; }
 
     .tp-pos-section { flex: 1; }
     .tp-pos-header { font-size: 12px; font-weight: 700; margin-bottom: 6px; text-align: center; color: var(--text); }
@@ -668,9 +667,9 @@
         flex-direction: column;
       }
 
-      /* PNL セクション：横一列に圧縮 */
-      #trade-panel #candle-count-section,
-      #trade-panel #pnl-section {
+      /* PNL・保有株数セクション：横一列に圧縮 */
+      #trade-panel #pnl-section,
+      #trade-panel #holding-section {
         min-height: 28px;
         padding: 3px 8px;
         display: flex;
@@ -678,9 +677,15 @@
         align-items: center;
         gap: 6px;
         flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
         border-bottom: 1px solid var(--border);
         flex-shrink: 0;
       }
+      #trade-panel #pnl-section::-webkit-scrollbar,
+      #trade-panel #holding-section::-webkit-scrollbar { display: none; }
+      #trade-panel #holding-section { gap: 14px; }
       #trade-panel .tp-row {
         margin-bottom: 0;
         flex-shrink: 0;
@@ -857,14 +862,14 @@
   </div>
 
   <div id="trade-panel">
-    <div class="tp-section" id="candle-count-section">
+    <div class="tp-section" id="holding-section">
       <div class="tp-row">
-        <span class="tp-lbl">ローソク足</span>
-        <span class="tp-val" id="candle-count-val">0本</span>
+        <span class="tp-lbl">保有株数(売)</span>
+        <span class="tp-val down-color" id="holding-sell">0株</span>
       </div>
-      <div class="tp-actions">
-        <button class="tp-btn" id="btn-count-start" onclick="startCandleCount()">開始</button>
-        <button class="tp-btn" id="btn-count-reset" onclick="resetCandleCount()">リセット</button>
+      <div class="tp-row">
+        <span class="tp-lbl">保有株数(買)</span>
+        <span class="tp-val up-color" id="holding-buy">0株</span>
       </div>
     </div>
 
@@ -884,7 +889,7 @@
         </div>
       </div>
       <div class="tp-row">
-        <span class="tp-lbl">確定損益</span>
+        <span class="tp-lbl">確定利益</span>
         <span class="tp-val" id="realized-pnl">0円</span>
       </div>
       <div class="tp-actions">
@@ -1831,7 +1836,8 @@ function showTradeTip(source, param, containerId, autoHide) {
   if (!trades.length) { hideTradeTip(); return; }
   const rows = trades.map(h => {
     const cls = h.type.startsWith('買') ? 'tt-buy' : 'tt-sell';
-    const pnl = h.pnl ? ` <span class="${h.pnl > 0 ? 'up-color' : 'down-color'}">(${h.pnl > 0 ? '+' : ''}${h.pnl.toLocaleString()}円)</span>` : '';
+    const pnlCls = h.pnl > 0 ? 'up-color' : (h.pnl < 0 ? 'down-color' : '');
+    const pnl = h.entry != null ? ` <span class="${pnlCls}">(${h.pnl > 0 ? '+' : ''}${h.pnl.toLocaleString()}円)</span>` : '';
     return `<div><span class="${cls}">${h.type}</span> ${h.qty.toLocaleString()}株 @ ${(+h.price).toLocaleString()}円${pnl}</div>`;
   }).join('');
   tip.innerHTML = `<div class="tt-date">${timeStr}</div>${rows}`;
@@ -2101,9 +2107,10 @@ function getMonday(dateStr) {
   const cached = mondayCache[str];
   if (cached) return cached;
   const d = new Date(str);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const res = new Date(d.setDate(diff)).toISOString().slice(0, 10);
+  const day = d.getUTCDay();
+  const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1);
+  d.setUTCDate(diff);
+  const res = d.toISOString().slice(0, 10);
   mondayCache[str] = res;
   return res;
 }
@@ -2320,7 +2327,6 @@ async function switchStock(code) {
 
     // トレード状態のリセット (直後に refreshChart するため内部 refresh はスキップ)
     if (typeof resetTradeState === 'function') resetTradeState(true);
-    if (typeof resetCandleCount === 'function') resetCandleCount();
 
     // 全データをセット
     refreshChart();
@@ -2694,42 +2700,11 @@ function showBarInfo(idx) {
   }
 
   updateTradePanel(c.close);
-  updateCandleCountUI();
 }
 
 /* ======================================================
    ローディング表示
 ====================================================== */
-let candleCountStartIdx = null;
-
-function startCandleCount() {
-  if (!allCandles.length) return;
-  candleCountStartIdx = cursor;
-  updateCandleCountUI();
-}
-
-function resetCandleCount() {
-  candleCountStartIdx = null;
-  updateCandleCountUI();
-}
-
-function updateCandleCountUI() {
-  const valEl = document.getElementById('candle-count-val');
-  const startBtn = document.getElementById('btn-count-start');
-  if (!valEl || !startBtn) return;
-
-  if (candleCountStartIdx === null || !allCandles.length) {
-    valEl.textContent = '0本';
-    valEl.classList.remove('counting');
-    startBtn.classList.remove('active');
-  } else {
-    const count = Math.max(0, cursor - candleCountStartIdx + 1);
-    valEl.textContent = `${count}本`;
-    valEl.classList.add('counting');
-    startBtn.classList.add('active');
-  }
-}
-
 function setLoading(show, msg = '') {
   const el = document.getElementById('loading');
   el.classList.toggle('hidden', !show);
@@ -2805,8 +2780,10 @@ function closeModal() {
 }
 
 function onSlider(val) {
+  if (!allCandles.length) return;
   const daysB = parseInt(val);
-  const tgtIdx = Math.max(winSize, allCandles.length - 1 - daysB);
+  const minIdx = Math.min(winSize - 1, allCandles.length - 1);
+  const tgtIdx = Math.max(minIdx, Math.min(allCandles.length - 1 - daysB, allCandles.length - 1));
   document.getElementById('m-slbl').textContent = `${daysB}日前`;
   document.getElementById('m-sprv').textContent = `→ 表示最終日: ${toYYMMDD(allCandles[tgtIdx].time)}`;
   document.getElementById('m-date').value       = allCandles[tgtIdx].time;
@@ -2814,13 +2791,14 @@ function onSlider(val) {
 
 function applyInit() {
   const dateStr = document.getElementById('m-date').value;
-  if (!dateStr) { closeModal(); return; }
+  if (!dateStr || !allCandles.length) { closeModal(); return; }
 
   // 入力日以降で最も近いインデックスを検索
   let idx = allCandles.findIndex(c => c.time >= dateStr);
   if (idx < 0) idx = allCandles.length - 1;
 
-  const newCursor = Math.max(winSize, Math.min(idx, allCandles.length - 1));
+  const minIdx = Math.min(winSize - 1, allCandles.length - 1);
+  const newCursor = Math.max(minIdx, Math.min(idx, allCandles.length - 1));
   flushPendingBeforeJump(newCursor);
   cursor = newCursor;
   refreshChart();
@@ -3122,6 +3100,13 @@ function updateTradePanel(currentPrice) {
   document.getElementById('pos-sell').textContent = tLotsSell.length;
   document.getElementById('pos-buy').textContent = tLotsBuy.length;
 
+  const qtySell = tLotsSell.reduce((s, l) => s + l.unit, 0);
+  const qtyBuy  = tLotsBuy.reduce((s, l) => s + l.unit, 0);
+  const elHoldSell = document.getElementById('holding-sell');
+  const elHoldBuy  = document.getElementById('holding-buy');
+  if (elHoldSell) elHoldSell.textContent = `${qtySell.toLocaleString()}株`;
+  if (elHoldBuy)  elHoldBuy.textContent  = `${qtyBuy.toLocaleString()}株`;
+
   const avgSell = avgLotPrice(tLotsSell);
   const avgBuy = avgLotPrice(tLotsBuy);
   document.getElementById('avg-sell-price').textContent = tLotsSell.length ? `avg: ${Math.round(avgSell).toLocaleString()}` : 'avg: -';
@@ -3211,7 +3196,7 @@ function addHistory(time, type, qty, price, pnl, entry, closedLots = null, candl
 
   // 損益率（%）
   let pnlRate = null;
-  if (entry != null && entry > 0 && qty > 0 && pnl !== 0) {
+  if (entry != null && entry > 0 && qty > 0) {
     pnlRate = (pnl / (entry * qty)) * 100;
   }
 
@@ -3286,7 +3271,7 @@ function showHistory() {
       <td>${h.qty}</td>
       <td>${fmtEntry(h.entry)}</td>
       <td>${h.price.toLocaleString()}</td>
-      <td class="${h.pnl > 0 ? 'up-color' : (h.pnl < 0 ? 'down-color' : '')}">${h.pnl ? (h.pnl > 0 ? '+' : '') + h.pnl.toLocaleString() : '-'}</td>
+      <td class="${h.pnl > 0 ? 'up-color' : (h.pnl < 0 ? 'down-color' : '')}">${h.entry != null ? (h.pnl > 0 ? '+' : '') + h.pnl.toLocaleString() : '-'}</td>
       <td class="${h.pnlRate > 0 ? 'up-color' : (h.pnlRate < 0 ? 'down-color' : '')}">${pnlRateText}</td>
       <td title="${periodTitle}">${periodText}</td>
       <td style="text-align:left;">
@@ -3354,7 +3339,7 @@ function copyHistoryAI() {
   const stockName = stockInfo.name || currentCode;
 
   // 集計データ
-  const closeTrades = tHistory.filter(h => h.entry != null && h.pnl !== 0);
+  const closeTrades = tHistory.filter(h => h.entry != null);
   const winTrades = closeTrades.filter(h => h.pnl > 0);
   const loseTrades = closeTrades.filter(h => h.pnl < 0);
   const winRate = closeTrades.length > 0 ? ((winTrades.length / closeTrades.length) * 100).toFixed(1) : '0.0';
