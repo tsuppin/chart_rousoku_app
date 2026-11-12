@@ -685,7 +685,7 @@
       }
       #trade-panel #pnl-section::-webkit-scrollbar,
       #trade-panel #holding-section::-webkit-scrollbar { display: none; }
-      #trade-panel #holding-section { gap: 14px; }
+      #trade-panel #holding-section { gap: 8px; }
       #trade-panel .tp-row {
         margin-bottom: 0;
         flex-shrink: 0;
@@ -698,7 +698,7 @@
       #trade-panel .tp-val { font-size: 11px; }
       #trade-panel .tp-actions {
         margin-top: 0;
-        margin-left: auto;
+        margin-left: 0;
         flex-shrink: 0;
         gap: 4px;
       }
@@ -871,6 +871,9 @@
         <span class="tp-lbl">保有株数(買)</span>
         <span class="tp-val up-color" id="holding-buy">0株</span>
       </div>
+      <div class="tp-actions">
+        <button class="tp-btn" onclick="showHistory()">🕒 取引履歴</button>
+      </div>
     </div>
 
     <div class="tp-section" id="pnl-section">
@@ -891,9 +894,6 @@
       <div class="tp-row">
         <span class="tp-lbl">確定利益</span>
         <span class="tp-val" id="realized-pnl">0円</span>
-      </div>
-      <div class="tp-actions">
-        <button class="tp-btn" onclick="showHistory()">🕒 取引履歴</button>
       </div>
     </div>
 
@@ -1981,7 +1981,7 @@ function initChart() {
     c.timeScale().subscribeVisibleLogicalRangeChange(() => {
       if (syncingBarSpacing) return;
       const sp = c.timeScale().options().barSpacing;
-      if (sp && Math.abs(sp - currentBarSpacing) > 0.02) {
+      if (sp && Math.abs(sp - currentBarSpacing) > 0.1) {
         syncingBarSpacing = true;
         currentBarSpacing = Math.max(MIN_BAR_SPACING, Math.min(MAX_BAR_SPACING, sp));
         for (const other of [chart, chartW, chartM]) {
@@ -1989,7 +1989,9 @@ function initChart() {
             other.timeScale().applyOptions({ barSpacing: currentBarSpacing });
           }
         }
-        syncingBarSpacing = false;
+        requestAnimationFrame(() => {
+          syncingBarSpacing = false;
+        });
       }
     });
   }
@@ -2519,41 +2521,30 @@ function stepBackwardChart() {
 function updateVisibleRange() {
   hideAllRangeBoxes();
   if (!allCandles.length) return;
-  const endIdx = cursor;
-  const startIdx = Math.max(0, endIdx - winSize + 1);
   
   try {
-    // 日足の表示範囲（日付）
-    const range = {
-      from: allCandles[startIdx].time,
-      to:   allCandles[endIdx].time,
-    };
-
-    // 画面幅から最適な barSpacing を直接計算（モバイルでの遅延防止）
-    const wrapW = document.getElementById('chart-wrap').clientWidth;
+    // 画面幅から最適な barSpacing を直接計算
+    const wrapEl = document.getElementById('chart-wrap');
+    const wrapW = wrapEl ? wrapEl.clientWidth : window.innerWidth;
     const priceScaleW = 62; // 右価格スケールの概算幅
     const spacing = Math.max(MIN_BAR_SPACING, (wrapW - priceScaleW - 20) / winSize);
     currentBarSpacing = spacing;
 
-    // 両方のチャートに同時に適用
     const timeOptions = {
       barSpacing: spacing,
       rightOffset: 3,
     };
     
     syncingBarSpacing = true;
-    chart.timeScale().applyOptions(timeOptions);
-    chartW.timeScale().applyOptions(timeOptions);
-    chartM.timeScale().applyOptions(timeOptions);
-    syncingBarSpacing = false;
-    
-    chart.timeScale().setVisibleRange(range);
+    chart?.timeScale().applyOptions(timeOptions);
+    chartW?.timeScale().applyOptions(timeOptions);
+    chartM?.timeScale().applyOptions(timeOptions);
 
-    // スクロール同期（週足・月足の右端を合わせる）
-    setTimeout(() => {
-      chartW.timeScale().scrollToPosition(0, false);
-      chartM.timeScale().scrollToPosition(0, false);
-    }, 0);
+    scrollKeepZoom();
+
+    requestAnimationFrame(() => {
+      syncingBarSpacing = false;
+    });
 
   } catch (_) {
     syncingBarSpacing = false;
