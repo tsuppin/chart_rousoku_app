@@ -379,6 +379,30 @@
       background: rgba(255, 255, 255, 0.1);
     }
 
+    /* トレード通知トースト */
+    .trade-toast {
+      position: fixed;
+      top: 56px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-10px);
+      background: rgba(30, 34, 48, 0.96);
+      color: #fff;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      padding: 8px 16px;
+      font-size: 12px;
+      z-index: 2500;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      white-space: nowrap;
+    }
+    .trade-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
     @media (max-width: 800px) {
       #main-area { flex-direction: column; }
       #trade-panel { width: 100%; border-left: none; border-top: 1px solid var(--border); flex: 0 0 auto; }
@@ -1062,6 +1086,8 @@
     </div>
   </div>
 </div>
+
+<div id="trade-toast" class="trade-toast"></div>
 
 <!-- ====================================================
      JavaScript: チャートロジック
@@ -2568,8 +2594,9 @@ function scrollKeepZoom() {
 function goNext() {
   if (!allCandles.length || cursor >= allCandles.length - 1) return;
   cursor++;
-  executePending(cursor); // 翌日寄付約定モードの注文をこのバーの始値で約定
-  stepForwardChart();     // O(1)差分更新
+  executePending(cursor);    // 翌日寄付約定モードの注文をこのバーの始値で約定
+  settleExpiredLots(cursor); // 制度信用6ヶ月期日到来の建玉をこのバーの始値で自動決済
+  stepForwardChart();        // O(1)差分更新
   scrollKeepZoom();
   showBarInfo(cursor);
 }
@@ -2887,7 +2914,7 @@ document.getElementById('hist-modal').addEventListener('click', e => {
    トレードシミュレーションロジック
 ====================================================== */
 // 建玉は1枚ずつ個別管理する（実際の信用取引の建玉管理に準拠）
-// lot: { price: 建値, time: 建日, unit: 株数 }
+// lot: { price: 建値, time: 建日, unit: 株数, expireDate: 6ヶ月期日(YYYY-MM-DD) }
 let tLotsSell = [];
 let tLotsBuy = [];
 let tRealizedPnL = 0;
@@ -2900,6 +2927,30 @@ let tExecMode = localStorage.getItem('tExecMode') || 'next_open';
 let tCloseOrder = localStorage.getItem('tCloseOrder') || 'fifo';
 
 const CLOSE_ORDER_LABEL = { fifo: '古い順', lifo: '新しい順', profit: '利益順', loss: '損失順' };
+const CREDIT_TERM_MONTHS = 6; // 制度信用の弁済期限（6ヶ月）
+let toastTimer = null;
+
+/** YYYY-MM-DD 文字列に指定月数を加算（月末日を超える場合はその月の末日に丸める） */
+function addMonthsStr(dateStr, months) {
+  const parts = String(dateStr).split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return null;
+  const [y, m, d] = parts;
+  const totalMonths = y * 12 + (m - 1) + months;
+  const ny = Math.floor(totalMonths / 12);
+  const nm = (totalMonths % 12) + 1;
+  const lastDay = new Date(ny, nm, 0).getDate();
+  const nd = Math.min(d, lastDay);
+  return `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`;
+}
+
+function showTradeToast(msg) {
+  const el = document.getElementById('trade-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+}
 
 function getTradeUnit() {
   return parseInt(document.getElementById('trade-unit').value) || 100;
@@ -2956,16 +3007,61 @@ function takeLotsToClose(side, n, price) {
   return closed;
 }
 
-/** 建玉を決済して履歴に記録 */
-function closeLots(side, n, idx, price, label) {
-  if (n <= 0) return 0;
-  const closed = takeLotsToClose(side, n, price);
+/** 決済された建玉群の損益を集計して履歴に記録する共通ヘルパー */
+function recordClosedLots(side, closed, idx, price, label) {
   if (!closed.length) return 0;
   const pnl = closed.reduce((s, l) => s + lotPnl(l, side, price), 0);
   const qty = closed.reduce((s, l) => s + l.unit, 0);
   tRealizedPnL += pnl;
   addHistory(allCandles[idx].time, label, qty, price, pnl, avgLotPrice(closed), closed, idx);
+  return qty;
+}
+
+/** 建玉を決済して履歴に記録 */
+function closeLots(side, n, idx, price, label) {
+  if (n <= 0) return 0;
+  const closed = takeLotsToClose(side, n, price);
+  if (!closed.length) return 0;
+  recordClosedLots(side, closed, idx, price, label);
   return closed.length;
+}
+
+/** 制度信用6ヶ月期日に達した建玉を抽出して自動決済（そのバーの始値で約定） */
+function settleExpiredLots(idx) {
+  if (idx < 0 || idx >= allCandles.length) return;
+  if (!tLotsSell.length && !tLotsBuy.length) return;
+  const c = allCandles[idx];
+  const curDate = toDateStr(c.time);
+  const price = c.open;
+
+  const closeExpiredSide = (side) => {
+    const lots = side === 'buy' ? tLotsBuy : tLotsSell;
+    const expired = [];
+    const remain = [];
+    for (const l of lots) {
+      const exp = l.expireDate || addMonthsStr(toDateStr(l.time), CREDIT_TERM_MONTHS);
+      if (exp && curDate >= exp) expired.push(l);
+      else remain.push(l);
+    }
+    if (!expired.length) return 0;
+    if (side === 'buy') tLotsBuy = remain; else tLotsSell = remain;
+    const label = side === 'buy' ? '買決済(6ヶ月期日)' : '売決済(6ヶ月期日)';
+    return recordClosedLots(side, expired, idx, price, label);
+  };
+
+  const closedSellQty = closeExpiredSide('sell');
+  const closedBuyQty  = closeExpiredSide('buy');
+
+  if (closedSellQty > 0 || closedBuyQty > 0) {
+    if (closedSellQty > 0 && closedBuyQty > 0) setCandleColor(idx, 'settle_all');
+    else if (closedBuyQty > 0) setCandleColor(idx, 'buy_close');
+    else setCandleColor(idx, 'sell_close');
+
+    const parts = [];
+    if (closedSellQty > 0) parts.push(`売 ${closedSellQty}株`);
+    if (closedBuyQty  > 0) parts.push(`買 ${closedBuyQty}株`);
+    showTradeToast(`⏰ 制度信用6ヶ月期日により自動決済しました（${parts.join(' / ')}）`);
+  }
 }
 
 /** 注文を指定バー・指定価格で約定させる */
@@ -2984,7 +3080,8 @@ function executeAction(action, idx, price) {
   const side = action.kind;
   const lots = side === 'buy' ? tLotsBuy : tLotsSell;
   if (action.delta > 0) {
-    for (let i = 0; i < action.delta; i++) lots.push({ price, time: c.time, unit });
+    const expireDate = addMonthsStr(toDateStr(c.time), CREDIT_TERM_MONTHS);
+    for (let i = 0; i < action.delta; i++) lots.push({ price, time: c.time, unit, expireDate });
     addHistory(c.time, side === 'buy' ? '買追加' : '売追加', action.delta * unit, price, 0, null, null, idx);
     setCandleColor(idx, side === 'buy' ? 'buy_entry' : 'sell_entry');
   } else if (action.delta < 0) {
@@ -3040,10 +3137,16 @@ function executePending(idx) {
   for (const a of queue) executeAction(a, idx, price);
 }
 
-/** 先の日付へジャンプする前に、翌バーの寄付で未約定注文を約定させる */
+/** 先の日付へジャンプする前に、翌バーの寄付約定と経過日数の6ヶ月期日自動決済を順次処理する */
 function flushPendingBeforeJump(newCursor) {
-  if (tPending.length && newCursor > cursor && cursor + 1 < allCandles.length) {
+  if (newCursor <= cursor) return;
+  if (tPending.length && cursor + 1 < allCandles.length) {
     executePending(cursor + 1);
+  }
+  const end = Math.min(newCursor, allCandles.length - 1);
+  for (let i = cursor + 1; i <= end; i++) {
+    if (!tLotsSell.length && !tLotsBuy.length) break;
+    settleExpiredLots(i);
   }
 }
 
