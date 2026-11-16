@@ -262,6 +262,8 @@
     }
 
     .tp-section { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+    #holding-section { padding: 6px 12px 4px; }
+    #pnl-section { padding: 4px 12px; }
     .tp-row { display: flex; justify-content: space-between; margin-bottom: 4px; align-items: baseline; }
     .tp-row:last-child { margin-bottom: 0; }
     .tp-lbl { font-size: 11px; color: var(--dim); }
@@ -269,7 +271,7 @@
     .tp-val.profit { color: var(--up); }
     .tp-val.loss { color: var(--down); }
 
-    .tp-actions { display: flex; gap: 6px; margin-top: 6px; }
+    .tp-actions { display: flex; gap: 6px; margin-top: 4px; }
     .tp-btn {
       flex: 1; background: var(--hover); border: 1px solid var(--border);
       color: var(--text); padding: 5px; font-size: 11px; border-radius: 5px;
@@ -694,8 +696,8 @@
       /* PNL・保有株数セクション：横一列に圧縮 */
       #trade-panel #pnl-section,
       #trade-panel #holding-section {
-        min-height: 28px;
-        padding: 3px 8px;
+        min-height: 0;
+        padding: 1px 8px;
         display: flex;
         flex-direction: row;
         align-items: center;
