@@ -2662,11 +2662,23 @@ function updateVisibleRange() {
 
 /** ズームを保持したまま最新バーを画面右端にスクロール */
 function scrollKeepZoom() {
-  try { 
-    chart.timeScale().scrollToRealTime(); 
-    chartW.timeScale().scrollToRealTime(); 
-    chartM.timeScale().scrollToRealTime(); 
+  const prevSync = syncingBarSpacing;
+  syncingBarSpacing = true;
+  try {
+    chart.timeScale().scrollToRealTime();
+    chartW.timeScale().scrollToRealTime();
+    chartM.timeScale().scrollToRealTime();
   } catch (_) {}
+  syncingBarSpacing = prevSync;
+}
+
+/** 連続送り（長押し・キーリピート）時に描画フレーム完了を待ってキュー詰まりを防止 */
+let stepFramePending = false;
+function runThrottledStep(fn) {
+  if (stepFramePending) return;
+  stepFramePending = true;
+  fn();
+  requestAnimationFrame(() => { stepFramePending = false; });
 }
 
 /* ======================================================
@@ -2968,9 +2980,13 @@ document.addEventListener('keydown', e => {
       e.preventDefault(); toggleAuto(); break;
     case 'ArrowRight':
     case 'Enter':
-      e.preventDefault(); stopAuto(); goNext(); break;
+      e.preventDefault(); stopAuto();
+      if (e.repeat) runThrottledStep(goNext); else goNext();
+      break;
     case 'ArrowLeft':
-      e.preventDefault(); stopAuto(); goPrev(); break;
+      e.preventDefault(); stopAuto();
+      if (e.repeat) runThrottledStep(goPrev); else goPrev();
+      break;
     case 'End':
       e.preventDefault(); stopAuto(); goLatest(); break;
     case 'Escape':
@@ -3643,7 +3659,7 @@ function copyHistoryAI() {
         stepFn();
         repeatTimer = setInterval(() => {
           if (btn.disabled) { stopHold(); return; }
-          stepFn();
+          runThrottledStep(stepFn);
         }, 55);
       }, 320);
     };
