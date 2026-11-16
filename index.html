@@ -1472,6 +1472,84 @@ function createFineGridPrimitive(getSeriesList, mode) {
   };
 }
 
+/** 売買したローソク足の上に建玉数（売-買）を常時描画するプリミティブ */
+function createTradeLabelPrimitive(getLabelMap, getSeries) {
+  let chartInst = null;
+  let reqUpdate = null;
+
+  const renderer = {
+    draw(target) {
+      if (!chartInst) return;
+      const labelMap = getLabelMap();
+      const series = getSeries();
+      if (!labelMap || !labelMap.size || !series) return;
+
+      target.useBitmapCoordinateSpace(({ context: ctx, bitmapSize, horizontalPixelRatio, verticalPixelRatio }) => {
+        const paneW = bitmapSize.width / horizontalPixelRatio;
+        const paneH = bitmapSize.height / verticalPixelRatio;
+        if (paneW <= 2 || paneH <= 2) return;
+
+        const ts = chartInst.timeScale();
+        const range = ts.getVisibleLogicalRange();
+        if (!range) return;
+
+        const from = Math.max(0, Math.floor(range.from) - 1);
+        const to = Math.min(Math.ceil(range.to) + 1, from + 3000);
+
+        const fontPx = Math.max(9, Math.round(11 * verticalPixelRatio));
+        ctx.save();
+        ctx.font = `700 ${fontPx}px 'Roboto Mono', monospace`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = Math.max(2, Math.round(3 * horizontalPixelRatio));
+        ctx.strokeStyle = 'rgba(15, 17, 23, 0.88)';
+
+        for (let i = from; i <= to; i++) {
+          const d = series.dataByIndex(i, 0);
+          if (!d || d.high == null) continue;
+          const item = labelMap.get(toDateStr(d.time));
+          if (!item) continue;
+
+          const x = ts.logicalToCoordinate(i);
+          const yHigh = series.priceToCoordinate(d.high);
+          if (x === null || yHigh === null) continue;
+          if (x < -30 || x > paneW + 30) continue;
+
+          const drawX = Math.round(x * horizontalPixelRatio);
+          const drawY = Math.round(Math.max(14, yHigh - 5) * verticalPixelRatio);
+          ctx.strokeText(item.text, drawX, drawY);
+          ctx.fillStyle = item.color;
+          ctx.fillText(item.text, drawX, drawY);
+        }
+        ctx.restore();
+      });
+    },
+  };
+
+  const paneViews = [{
+    zOrder() { return 'top'; },
+    renderer() { return renderer; },
+  }];
+
+  return {
+    attached(param) {
+      chartInst = param.chart;
+      reqUpdate = param.requestUpdate;
+      if (reqUpdate) tradeLabelUpdaters.push(reqUpdate);
+    },
+    detached() {
+      if (reqUpdate) {
+        const idx = tradeLabelUpdaters.indexOf(reqUpdate);
+        if (idx >= 0) tradeLabelUpdaters.splice(idx, 1);
+      }
+      chartInst = null;
+      reqUpdate = null;
+    },
+    paneViews() { return paneViews; },
+  };
+}
+
 /* ======================================================
    スワイプ拡大縮小 & ドラッグ範囲選択 (ローソク足本数)
 ====================================================== */
@@ -2051,6 +2129,11 @@ function initChart() {
     () => [candleSeriesM, closeSeriesM, ...MA_DEFS.map(d => maSeriesM[d.p])],
     'M'
   ));
+
+  // --- 売買建玉ラベル (ローソク足上部 zOrder: 'top') ---
+  candleSeries.attachPrimitive(createTradeLabelPrimitive(() => tradeLabelsDaily, () => candleSeries));
+  candleSeriesW.attachPrimitive(createTradeLabelPrimitive(() => tradeLabelsWeekly, () => candleSeriesW));
+  candleSeriesM.attachPrimitive(createTradeLabelPrimitive(() => tradeLabelsMonthly, () => candleSeriesM));
 
   setupWrapTouchZoom();
   setupRangeSelect('chart-daily',   () => chart,  () => candleSeries);
@@ -2969,18 +3052,40 @@ function avgLotPrice(lots) {
   return lots.reduce((s, l) => s + l.price * l.unit, 0) / totalUnit;
 }
 
+const TRADE_ACTION_COLORS = {
+  buy_entry:  '#42A5F5', // 青
+  sell_entry: '#E040FB', // 紫
+  buy_close:  '#FFA726', // オレンジ
+  sell_close: '#FFF176', // 黄色
+  settle_all: '#FFFFFF', // 白
+};
+
+// 各時間軸のローソク足上に表示する建玉ラベル (key: 日付/月曜/月初, val: { text, color })
+const tradeLabelsDaily   = new Map();
+const tradeLabelsWeekly  = new Map();
+const tradeLabelsMonthly = new Map();
+const tradeLabelUpdaters = [];
+
+function refreshTradeLabels() {
+  for (const fn of tradeLabelUpdaters) fn();
+}
+
+/** 売買後の建玉数（売-買）と最後の売買色を日足・週足・月足ラベルに記録 */
+function recordTradeLabel(idx, actionType) {
+  if (idx < 0 || idx >= allCandles.length) return;
+  const color = TRADE_ACTION_COLORS[actionType];
+  if (!color) return;
+  const s = toDateStr(allCandles[idx].time);
+  const label = { text: `${tLotsSell.length}-${tLotsBuy.length}`, color };
+  tradeLabelsDaily.set(s, label);
+  tradeLabelsWeekly.set(getMonday(s), label);
+  tradeLabelsMonthly.set(s.slice(0, 7) + '-01', label);
+  refreshTradeLabels();
+}
+
 function setCandleColor(idx, actionType) {
   if (idx < 0 || idx >= allCandles.length) return;
-  
-  let color = null;
-  switch(actionType) {
-    case 'buy_entry':   color = '#42A5F5'; break; // 青
-    case 'sell_entry':  color = '#E040FB'; break; // 紫
-    case 'buy_close':   color = '#FFA726'; break; // オレンジ
-    case 'sell_close':  color = '#FFF176'; break; // 黄色
-    case 'settle_all':  color = '#FFFFFF'; break; // 白
-  }
-  
+  const color = TRADE_ACTION_COLORS[actionType];
   if (color) {
     allCandles[idx].color = color;
     allCandles[idx].wickColor = color;
@@ -3053,9 +3158,11 @@ function settleExpiredLots(idx) {
   const closedBuyQty  = closeExpiredSide('buy');
 
   if (closedSellQty > 0 || closedBuyQty > 0) {
-    if (closedSellQty > 0 && closedBuyQty > 0) setCandleColor(idx, 'settle_all');
-    else if (closedBuyQty > 0) setCandleColor(idx, 'buy_close');
-    else setCandleColor(idx, 'sell_close');
+    const actionType = (closedSellQty > 0 && closedBuyQty > 0)
+      ? 'settle_all'
+      : (closedBuyQty > 0 ? 'buy_close' : 'sell_close');
+    setCandleColor(idx, actionType);
+    recordTradeLabel(idx, actionType);
 
     const parts = [];
     if (closedSellQty > 0) parts.push(`売 ${closedSellQty}株`);
@@ -3074,6 +3181,7 @@ function executeAction(action, idx, price) {
     closeLots('sell', tLotsSell.length, idx, price, '売決済(区切)');
     closeLots('buy',  tLotsBuy.length,  idx, price, '買決済(区切)');
     setCandleColor(idx, 'settle_all');
+    recordTradeLabel(idx, 'settle_all');
     return;
   }
 
@@ -3083,12 +3191,16 @@ function executeAction(action, idx, price) {
     const expireDate = addMonthsStr(toDateStr(c.time), CREDIT_TERM_MONTHS);
     for (let i = 0; i < action.delta; i++) lots.push({ price, time: c.time, unit, expireDate });
     addHistory(c.time, side === 'buy' ? '買追加' : '売追加', action.delta * unit, price, 0, null, null, idx);
-    setCandleColor(idx, side === 'buy' ? 'buy_entry' : 'sell_entry');
+    const actionType = side === 'buy' ? 'buy_entry' : 'sell_entry';
+    setCandleColor(idx, actionType);
+    recordTradeLabel(idx, actionType);
   } else if (action.delta < 0) {
     const n = Math.min(Math.abs(action.delta), lots.length);
     const label = (side === 'buy' ? '買決済' : '売決済') + `(${CLOSE_ORDER_LABEL[tCloseOrder]})`;
     if (closeLots(side, n, idx, price, label) > 0) {
-      setCandleColor(idx, side === 'buy' ? 'buy_close' : 'sell_close');
+      const actionType = side === 'buy' ? 'buy_close' : 'sell_close';
+      setCandleColor(idx, actionType);
+      recordTradeLabel(idx, actionType);
     }
   }
 }
@@ -3321,6 +3433,10 @@ function resetTradeState(skipRefresh = false) {
   tPending = [];
   tRealizedPnL = 0;
   tHistory = [];
+  tradeLabelsDaily.clear();
+  tradeLabelsWeekly.clear();
+  tradeLabelsMonthly.clear();
+  refreshTradeLabels();
   
   if (allCandles && allCandles.length) {
     for (let i = 0; i < allCandles.length; i++) {
