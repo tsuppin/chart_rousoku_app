@@ -888,24 +888,20 @@
   <div id="trade-panel">
     <div class="tp-section" id="holding-section">
       <div class="tp-row">
-        <span class="tp-lbl">保有株数(売)</span>
-        <span class="tp-val down-color" id="holding-sell">0株</span>
+        <span class="tp-lbl">評価損益</span>
+        <span class="tp-val" id="unrealized-pnl">0円</span>
       </div>
       <div class="tp-row">
-        <span class="tp-lbl">保有株数(買)</span>
-        <span class="tp-val up-color" id="holding-buy">0株</span>
+        <span class="tp-lbl">確定利益</span>
+        <span class="tp-val" id="realized-pnl">0円</span>
       </div>
       <div class="tp-actions">
         <button class="tp-btn" onclick="showHistory()">🕒 取引履歴</button>
       </div>
     </div>
 
-    <div class="tp-section" id="pnl-section">
-      <div class="tp-row">
-        <span class="tp-lbl">評価損益</span>
-        <span class="tp-val" id="unrealized-pnl">0円</span>
-      </div>
-      <div id="pnl-detail" style="display: none; font-size: 11px; margin: -4px 0 10px 0; padding-left: 4px; border-left: 2px solid var(--border); flex-direction: column; gap: 2px;">
+    <div class="tp-section" id="pnl-section" style="display: none;">
+      <div id="pnl-detail" style="display: none; font-size: 11px; margin: 0; padding-left: 4px; border-left: 2px solid var(--border); flex-direction: column; gap: 2px;">
         <div id="unpnl-sell-row" style="display: flex; justify-content: space-between; white-space: nowrap;">
           <span id="unpnl-sell-lbl">売損:</span>
           <span id="unpnl-sell">0円</span>
@@ -914,10 +910,6 @@
           <span id="unpnl-buy-lbl">買損:</span>
           <span id="unpnl-buy">0円</span>
         </div>
-      </div>
-      <div class="tp-row">
-        <span class="tp-lbl">確定利益</span>
-        <span class="tp-val" id="realized-pnl">0円</span>
       </div>
     </div>
 
@@ -3322,13 +3314,6 @@ function updateTradePanel(currentPrice) {
   document.getElementById('pos-sell').textContent = tLotsSell.length;
   document.getElementById('pos-buy').textContent = tLotsBuy.length;
 
-  const qtySell = tLotsSell.reduce((s, l) => s + l.unit, 0);
-  const qtyBuy  = tLotsBuy.reduce((s, l) => s + l.unit, 0);
-  const elHoldSell = document.getElementById('holding-sell');
-  const elHoldBuy  = document.getElementById('holding-buy');
-  if (elHoldSell) elHoldSell.textContent = `${qtySell.toLocaleString()}株`;
-  if (elHoldBuy)  elHoldBuy.textContent  = `${qtyBuy.toLocaleString()}株`;
-
   const avgSell = avgLotPrice(tLotsSell);
   const avgBuy = avgLotPrice(tLotsBuy);
   document.getElementById('avg-sell-price').textContent = tLotsSell.length ? `avg: ${Math.round(avgSell).toLocaleString()}` : 'avg: -';
@@ -3354,8 +3339,10 @@ function updateTradePanel(currentPrice) {
   elUnPnl.className = 'tp-val ' + (unPnl > 0 ? 'profit' : (unPnl < 0 ? 'loss' : ''));
 
   // 内訳の更新
+  const elPnlSec = document.getElementById('pnl-section');
   const elDetail = document.getElementById('pnl-detail');
   if (tLotsSell.length && tLotsBuy.length) {
+    if (elPnlSec) elPnlSec.style.display = '';
     elDetail.style.display = 'flex';
     document.getElementById('unpnl-sell-lbl').textContent = unPnlSell >= 0 ? '売益:' : '売損:';
     document.getElementById('unpnl-sell').textContent = Math.round(unPnlSell).toLocaleString() + '円';
@@ -3364,6 +3351,7 @@ function updateTradePanel(currentPrice) {
     document.getElementById('unpnl-buy').textContent = Math.round(unPnlBuy).toLocaleString() + '円';
     document.getElementById('unpnl-buy-row').style.color = unPnlBuy > 0 ? 'var(--up)' : (unPnlBuy < 0 ? 'var(--down)' : 'inherit');
   } else {
+    if (elPnlSec) elPnlSec.style.display = 'none';
     elDetail.style.display = 'none';
   }
 
