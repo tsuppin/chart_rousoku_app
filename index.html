@@ -96,6 +96,12 @@
     /* 銘柄セレクター */
     #stock-col { display: flex; flex-direction: column; gap: 2px; flex-shrink: 1; min-width: 0; }
     #stock-selector { display: flex; gap: 4px; flex-shrink: 0; align-items: center; }
+    #category-select {
+      background: var(--hover); border: 1px solid var(--border); color: var(--text);
+      padding: 5px 6px; border-radius: 5px; font-size: 12px; font-family: inherit;
+      outline: none; cursor: pointer; transition: border-color .15s;
+    }
+    #category-select:focus { border-color: var(--accent); }
     #stock-search {
       background: var(--hover); border: 1px solid var(--border); color: var(--text);
       padding: 5px 8px; border-radius: 5px; font-size: 12px; font-family: inherit;
@@ -108,9 +114,25 @@
       max-width: 200px; outline: none; cursor: pointer; transition: border-color .15s;
     }
     #stock-select:focus { border-color: var(--accent); }
+    #stock-select optgroup {
+      background: var(--panel); color: var(--dim); font-weight: 700; font-style: normal;
+    }
+    #stock-select option {
+      background: var(--hover); color: var(--text); font-weight: 400;
+    }
+    #btn-random {
+      background: var(--hover); border: 1px solid var(--border); color: var(--text);
+      padding: 4px 8px; border-radius: 5px; font-size: 13px; line-height: 1.2;
+      cursor: pointer; flex-shrink: 0; transition: background .15s, border-color .15s;
+    }
+    #btn-random:hover { background: var(--active); border-color: var(--accent); }
+    #btn-random:active { transform: scale(0.95); }
     @media (max-width:600px) {
-      #stock-search { width: 80px; font-size: 11px; }
-      #stock-select { max-width: 140px; font-size: 11px; }
+      #stock-selector { gap: 3px; }
+      #category-select { max-width: 62px; padding: 4px 2px; font-size: 11px; }
+      #stock-search { width: 52px; padding: 4px 4px; font-size: 11px; }
+      #stock-select { max-width: 96px; padding: 4px 2px; font-size: 11px; }
+      #btn-random { padding: 3px 6px; font-size: 12px; }
     }
 
     /* 価格情報エリア */
@@ -218,7 +240,7 @@
       width: 100%;
       touch-action: none;
     }
-    .btn, .wbtn, .spd-btn, .tp-btn, .tp-arrow, .ma-entry {
+    .btn, .wbtn, .spd-btn, .tp-btn, .tp-arrow, .tp-btn-settle, .m-btn, .ma-entry, #btn-random, #category-select, #stock-select {
       touch-action: manipulation;
     }
     #chart-daily {
@@ -631,16 +653,22 @@
     }
     #swipe-hint.hidden { opacity: 0; }
 
+    @media (min-width: 601px) and (max-width: 960px) {
+      #category-select { max-width: 95px; font-size: 12px; }
+      #stock-search { width: 90px; font-size: 12px; }
+      #stock-select { max-width: 165px; font-size: 12px; }
+    }
+
     @media (max-width: 600px), (orientation: portrait) {
-      /* ヘッダーをコンパクトに */
-      #header { padding: 5px 8px; gap: 6px; min-height: 44px; }
+      /* ヘッダーをコンパクトに（1行固定で折り返し防止） */
+      #header { padding: 4px 6px; gap: 4px; min-height: 44px; flex-wrap: nowrap; }
       #app-title { font-size: 11px; }
       .stock-btn { padding: 6px 8px; font-size: 11px; min-height: 36px; }
-      #price-area { gap: 8px; }
-      #cur-price { font-size: 18px; }
-      #price-chg { font-size: 11px; }
+      #price-area { gap: 4px; }
+      #cur-price { font-size: 16px; }
+      #price-chg { font-size: 10px; }
       .olbl { font-size: 8px; }
-      .oval { font-size: 11px; }
+      .oval { font-size: 10px; }
       .vdiv { display: none; }
 
       /* MA凡例バーをスクロール可能＆コンパクトに */
@@ -782,8 +810,18 @@
 
   <div id="stock-col">
   <div id="stock-selector">
+    <select id="category-select" onchange="onCategoryChange(this.value)" title="カテゴリ選択">
+      <option value="all">すべて</option>
+      <option value="jp_stock">日本株</option>
+      <option value="us_stock">米国株</option>
+      <option value="index">株価指数</option>
+      <option value="fx">為替</option>
+      <option value="commodity">コモディティ</option>
+      <option value="crypto">仮想通貨</option>
+    </select>
     <input id="stock-search" type="text" placeholder="コード/名前" oninput="filterStocks(this.value)">
     <select id="stock-select" onchange="switchStock(this.value)"></select>
+    <button id="btn-random" onclick="pickRandomStock()" title="選択中のカテゴリからランダム表示">🎲</button>
   </div>
       <div class="ohlcv">
         <div class="oitem"><span class="olbl">高値</span><span class="oval" id="v-high">---</span></div>
@@ -1115,114 +1153,399 @@ function toYYMMDD(t) {
    定数・設定
 ====================================================== */
 const STOCK_INFO = {
-  // ── 指数・為替・コモディティ・暗号資産 ──────────────────────────
-  'INDEX_N225':  {'name': '日経225'},
-  'INDEX_TOPX':  {'name': 'TOPIX ETF'},
-  'INDEX_DJI':   {'name': 'NYダウ'},
-  'INDEX_IXIC':  {'name': 'ナスダック'},
-  'INDEX_GSPC':  {'name': 'S&P500'},
-  'INDEX_WTI':   {'name': 'WTI原油'},
-  'INDEX_GOLD':  {'name': '金(ゴールド)'},
-  'INDEX_USDJPY':{'name': '米ドル/円'},
-  'INDEX_EURJPY':{'name': 'ユーロ/円'},
-  'INDEX_BTC':   {'name': 'ビットコイン'},
-  'INDEX_ETH':   {'name': 'イーサリアム'},
-  // ── 個別銘柄 ───────────────────────────────────────────
-  '1332':{'name':'マルハニチロ'},      '1333':{'name':'ニッスイ'},
-  '1605':{'name':'INPEX'},             '1801':{'name':'大成建設'},
-  '1802':{'name':'大林組'},            '1803':{'name':'清水建設'},
-  '1808':{'name':'長谷工コーポレーション'},'1812':{'name':'鹿島建設'},
-  '1925':{'name':'大和ハウス工業'},    '1928':{'name':'積水ハウス'},
-  '2002':{'name':'日清製粉GHD'},       '2269':{'name':'明治HD'},
-  '2282':{'name':'日本ハム'},          '2501':{'name':'サッポロHD'},
-  '2502':{'name':'アサヒGHD'},         '2503':{'name':'キリンHD'},
-  '2531':{'name':'宝HD'},              '2801':{'name':'キッコーマン'},
-  '2802':{'name':'味の素'},            '2871':{'name':'ニチレイ'},
-  '2914':{'name':'JT'},               '3401':{'name':'帝人'},
-  '3402':{'name':'東レ'},              '3436':{'name':'SUMCO'},
-  '3861':{'name':'王子HD'},            '3863':{'name':'日本製紙'},
-  '4004':{'name':'レゾナック・HD'},    '4005':{'name':'住友化学'},
-  '4021':{'name':'日産化学'},          '4042':{'name':'東ソー'},
-  '4043':{'name':'トクヤマ'},          '4061':{'name':'デンカ'},
-  '4063':{'name':'信越化学工業'},      '4151':{'name':'協和キリン'},
-  '4183':{'name':'三井化学'},          '4188':{'name':'三菱ケミカルG'},
-  '4208':{'name':'UBE'},              '4307':{'name':'野村総研'},
-  '4324':{'name':'電通グループ'},      '4452':{'name':'花王'},
-  '4502':{'name':'武田薬品'},          '4503':{'name':'アステラス製薬'},
-  '4506':{'name':'住友ファーマ'},      '4507':{'name':'塩野義製薬'},
-  '4519':{'name':'中外製薬'},          '4523':{'name':'エーザイ'},
-  '4528':{'name':'小野薬品'},          '4543':{'name':'テルモ'},
-  '4568':{'name':'第一三共'},          '4578':{'name':'大塚HD'},
-  '4689':{'name':'LINEヤフー'},        '5019':{'name':'出光興産'},
-  '5020':{'name':'ENEOS HD'},          '5108':{'name':'ブリヂストン'},
-  '5201':{'name':'AGC'},              '5214':{'name':'日本電気硝子'},
-  '5232':{'name':'住友大阪セメント'},  '5233':{'name':'太平洋セメント'},
-  '5301':{'name':'東海カーボン'},      '5332':{'name':'TOTO'},
-  '5333':{'name':'日本碍子'},          '5401':{'name':'日本製鉄'},
-  '5406':{'name':'神戸製鋼所'},        '5411':{'name':'JFE HD'},
-  '5541':{'name':'大平洋金属'},        '5631':{'name':'日本製鋼所'},
-  '5703':{'name':'日本軽金属HD'},      '5706':{'name':'三井金属'},
-  '5707':{'name':'東邦亜鉛'},          '5711':{'name':'三菱マテリアル'},
-  '5713':{'name':'住友金属鉱山'},      '5714':{'name':'DOWA HD'},
-  '5715':{'name':'古河機械金属'},      '5801':{'name':'古河電工'},
-  '5802':{'name':'住友電工'},          '5803':{'name':'フジクラ'},
-  '6098':{'name':'リクルートHD'},      '6103':{'name':'オークマ'},
-  '6113':{'name':'アマダ'},            '6146':{'name':'ディスコ'},
-  '6301':{'name':'コマツ'},            '6302':{'name':'住友重機'},
-  '6305':{'name':'日立建機'},          '6326':{'name':'クボタ'},
-  '6361':{'name':'荏原製作所'},        '6367':{'name':'ダイキン工業'},
-  '6501':{'name':'日立製作所'},        '6503':{'name':'三菱電機'},
-  '6504':{'name':'富士電機'},          '6506':{'name':'安川電機'},
-  '6508':{'name':'明電舎'},            '6594':{'name':'ニデック'},
-  '6645':{'name':'オムロン'},          '6674':{'name':'GSユアサ'},
-  '6701':{'name':'NEC'},              '6702':{'name':'富士通'},
-  '6703':{'name':'沖電気工業'},        '6706':{'name':'電気興業'},
-  '6724':{'name':'セイコーエプソン'}, '6752':{'name':'パナソニックHD'},
-  '6753':{'name':'シャープ'},          '6758':{'name':'ソニーグループ'},
-  '6762':{'name':'TDK'},              '6770':{'name':'アルプスアルパイン'},
-  '6857':{'name':'アドバンテスト'},    '6861':{'name':'キーエンス'},
-  '6902':{'name':'デンソー'},          '6952':{'name':'カシオ計算機'},
-  '6954':{'name':'ファナック'},        '6971':{'name':'京セラ'},
-  '6976':{'name':'太陽誘電'},          '6981':{'name':'村田製作所'},
-  '7011':{'name':'三菱重工'},          '7013':{'name':'IHI'},
-  '7201':{'name':'日産自動車'},        '7202':{'name':'いすゞ自動車'},
-  '7203':{'name':'トヨタ自動車'},
-  '7211':{'name':'三菱自動車'},        '7261':{'name':'マツダ'},
-  '7267':{'name':'ホンダ'},            '7269':{'name':'スズキ'},
-  '7270':{'name':'SUBARU'},           '7272':{'name':'ヤマハ発動機'},
-  '7309':{'name':'シマノ'},            '7731':{'name':'ニコン'},
-  '7733':{'name':'オリンパス'},        '7735':{'name':'SCREEN HD'},
-  '7741':{'name':'HOYA'},             '7751':{'name':'キヤノン'},
-  '7752':{'name':'リコー'},            '7762':{'name':'シチズン時計'},
-  '7832':{'name':'バンダイナムコHD'}, '7912':{'name':'大日本印刷'},
-  '7951':{'name':'ヤマハ'},            '7974':{'name':'任天堂'},
-  '8001':{'name':'伊藤忠商事'},        '8002':{'name':'丸紅'},
-  '8015':{'name':'豊田通商'},          '8031':{'name':'三井物産'},
-  '8053':{'name':'住友商事'},          '8058':{'name':'三菱商事'},
-  '8233':{'name':'高島屋'},            '8252':{'name':'丸井グループ'},
-  '8267':{'name':'イオン'},            '8304':{'name':'あおぞら銀行'},
-  '8306':{'name':'三菱UFJ FG'},        '8308':{'name':'りそなHD'},
-  '8309':{'name':'三井住友トラストHD'},'8316':{'name':'三井住友FG'},
-  '8411':{'name':'みずほFG'},          '8601':{'name':'大和証券G本社'},
-  '8604':{'name':'野村HD'},            '8630':{'name':'SOMPO HD'},
-  '8725':{'name':'MS&AD'},            '8750':{'name':'第一生命HD'},
-  '8766':{'name':'東京海上HD'},        '8795':{'name':'T&D HD'},
-  '8801':{'name':'三井不動産'},        '8802':{'name':'三菱地所'},
-  '8804':{'name':'東京建物'},          '8830':{'name':'住友不動産'},
-  '9001':{'name':'東武鉄道'},          '9005':{'name':'東急'},
-  '9007':{'name':'小田急電鉄'},        '9008':{'name':'京王電鉄'},
-  '9009':{'name':'京成電鉄'},          '9020':{'name':'JR東日本'},
-  '9022':{'name':'JR東海'},            '9064':{'name':'ヤマトHD'},
-  '9101':{'name':'日本郵船'},          '9104':{'name':'商船三井'},
-  '9107':{'name':'川崎汽船'},          '9202':{'name':'ANA HD'},
-  '9301':{'name':'三菱倉庫'},          '9432':{'name':'NTT'},
-  '9433':{'name':'KDDI'},             '9434':{'name':'ソフトバンク'},
-  '9501':{'name':'東京電力HD'},        '9502':{'name':'中部電力'},
-  '9503':{'name':'関西電力'},          '9531':{'name':'東京ガス'},
-  '9532':{'name':'大阪ガス'},          '9602':{'name':'東宝'},
-  '9684':{'name':'スクウェア・エニックスHD'},
-  '9735':{'name':'セコム'},            '9983':{'name':'ファーストリテイリング'},
-  '9984':{'name':'ソフトバンクG'},
+  // ── 株価指数 ───────────────────────────────────────────
+  'INDEX_N225':   {'name': '日経225',             'cat': 'index'},
+  'INDEX_TOPX':   {'name': 'TOPIX ETF',           'cat': 'index'},
+  'INDEX_JPX400': {'name': 'JPX日経400 ETF',      'cat': 'index'},
+  'INDEX_GR250':  {'name': '東証グロース250 ETF', 'cat': 'index'},
+  'INDEX_REIT':   {'name': '東証REIT指数 ETF',    'cat': 'index'},
+  'INDEX_DJI':    {'name': 'NYダウ',              'cat': 'index'},
+  'INDEX_IXIC':   {'name': 'ナスダック',          'cat': 'index'},
+  'INDEX_NDX':    {'name': 'ナスダック100',       'cat': 'index'},
+  'INDEX_GSPC':   {'name': 'S&P500',              'cat': 'index'},
+  'INDEX_RUT':    {'name': 'ラッセル2000',        'cat': 'index'},
+  'INDEX_DAX':    {'name': 'ドイツDAX',           'cat': 'index'},
+  'INDEX_FTSE':   {'name': 'イギリスFTSE100',     'cat': 'index'},
+  'INDEX_CAC':    {'name': 'フランスCAC40',       'cat': 'index'},
+  'INDEX_STOXX50':{'name': 'ユーロ・ストックス50','cat': 'index'},
+  'INDEX_NIFTY':  {'name': 'インドNifty50',       'cat': 'index'},
+  'INDEX_SENSEX': {'name': 'インドSENSEX',        'cat': 'index'},
+  'INDEX_TWII':   {'name': '台湾加権指数',        'cat': 'index'},
+  'INDEX_HSI':    {'name': '香港ハンセン指数',    'cat': 'index'},
+  'INDEX_SSEC':   {'name': '中国上海総合指数',    'cat': 'index'},
+  'INDEX_KOSPI':  {'name': '韓国KOSPI',           'cat': 'index'},
+  'INDEX_ASX200': {'name': '豪ASX200',            'cat': 'index'},
+  // ── 為替 ───────────────────────────────────────────────
+  'INDEX_USDJPY':{'name': '米ドル/円',          'cat': 'fx'},
+  'INDEX_EURJPY':{'name': 'ユーロ/円',          'cat': 'fx'},
+  'INDEX_GBPJPY':{'name': '英ポンド/円',        'cat': 'fx'},
+  'INDEX_AUDJPY':{'name': '豪ドル/円',          'cat': 'fx'},
+  'INDEX_NZDJPY':{'name': 'NZドル/円',          'cat': 'fx'},
+  'INDEX_CADJPY':{'name': 'カナダドル/円',      'cat': 'fx'},
+  'INDEX_CHFJPY':{'name': 'スイスフラン/円',    'cat': 'fx'},
+  'INDEX_EURUSD':{'name': 'ユーロ/米ドル',      'cat': 'fx'},
+  'INDEX_GBPUSD':{'name': '英ポンド/米ドル',    'cat': 'fx'},
+  'INDEX_AUDUSD':{'name': '豪ドル/米ドル',      'cat': 'fx'},
+  'INDEX_NZDUSD':{'name': 'NZドル/米ドル',      'cat': 'fx'},
+  'INDEX_USDCHF':{'name': '米ドル/スイスフラン','cat': 'fx'},
+  'INDEX_USDCAD':{'name': '米ドル/カナダドル',  'cat': 'fx'},
+  'INDEX_EURGBP':{'name': 'ユーロ/英ポンド',    'cat': 'fx'},
+  // ── コモディティ ───────────────────────────────────────
+  'INDEX_WTI':       {'name': 'WTI原油',                   'cat': 'commodity'},
+  'INDEX_BRENT':     {'name': 'ブレント原油',              'cat': 'commodity'},
+  'INDEX_NATGAS':    {'name': '天然ガス',                  'cat': 'commodity'},
+  'INDEX_GOLD':      {'name': '金(ゴールド)',              'cat': 'commodity'},
+  'INDEX_SILVER':    {'name': '銀(シルバー)',              'cat': 'commodity'},
+  'INDEX_PLATINUM':  {'name': 'プラチナ(白金)',            'cat': 'commodity'},
+  'INDEX_PALLADIUM': {'name': 'パラジウム',                'cat': 'commodity'},
+  'INDEX_COPPER':    {'name': '銅(カッパー)',              'cat': 'commodity'},
+  'INDEX_CORN':      {'name': 'トウモロコシ',              'cat': 'commodity'},
+  'INDEX_SOYBEAN':   {'name': '大豆',                      'cat': 'commodity'},
+  'INDEX_WHEAT':     {'name': '小麦',                      'cat': 'commodity'},
+  'INDEX_COFFEE':    {'name': 'コーヒー',                  'cat': 'commodity'},
+  'INDEX_SUGAR':     {'name': '砂糖',                      'cat': 'commodity'},
+  // ── 仮想通貨 ───────────────────────────────────────────
+  'INDEX_BTC':       {'name': 'ビットコイン',              'cat': 'crypto'},
+  'INDEX_ETH':       {'name': 'イーサリアム',              'cat': 'crypto'},
+  'INDEX_XRP':       {'name': 'リップル(XRP)',             'cat': 'crypto'},
+  'INDEX_SOL':       {'name': 'ソラナ(SOL)',               'cat': 'crypto'},
+  'INDEX_BNB':       {'name': 'バイナンスコイン(BNB)',     'cat': 'crypto'},
+  'INDEX_DOGE':      {'name': 'ドージコイン(DOGE)',        'cat': 'crypto'},
+  'INDEX_ADA':       {'name': 'カルダノ(ADA)',             'cat': 'crypto'},
+  'INDEX_AVAX':      {'name': 'アバランチ(AVAX)',          'cat': 'crypto'},
+  'INDEX_LINK':      {'name': 'チェーンリンク(LINK)',      'cat': 'crypto'},
+  'INDEX_LTC':       {'name': 'ライトコイン(LTC)',         'cat': 'crypto'},
+  'INDEX_BCH':       {'name': 'ビットコインキャッシュ(BCH)','cat': 'crypto'},
+  'INDEX_DOT':       {'name': 'ポルカドット(DOT)',         'cat': 'crypto'},
+  'INDEX_XLM':       {'name': 'ステラルーメン(XLM)',       'cat': 'crypto'},
+  // ── 米国株（個別銘柄） ─────────────────────────────────
+  'AAPL':{'name':'アップル (Apple)','cat':'us_stock'}, 'MSFT':{'name':'マイクロソフト (Microsoft)','cat':'us_stock'},
+  'NVDA':{'name':'エヌビディア (NVIDIA)','cat':'us_stock'}, 'GOOGL':{'name':'アルファベット (Google)','cat':'us_stock'},
+  'AMZN':{'name':'アマゾン (Amazon)','cat':'us_stock'}, 'META':{'name':'メタ (Meta Platforms)','cat':'us_stock'},
+  'TSLA':{'name':'テスラ (Tesla)','cat':'us_stock'}, 'AVGO':{'name':'ブロードコム (Broadcom)','cat':'us_stock'},
+  'AMD':{'name':'AMD','cat':'us_stock'}, 'INTC':{'name':'インテル (Intel)','cat':'us_stock'},
+  'TSM':{'name':'TSMC','cat':'us_stock'}, 'ASML':{'name':'ASMLホールディング','cat':'us_stock'},
+  'ARM':{'name':'アーム (Arm Holdings)','cat':'us_stock'}, 'QCOM':{'name':'クアルコム (Qualcomm)','cat':'us_stock'},
+  'TXN':{'name':'テキサス・インスツルメンツ (TI)','cat':'us_stock'}, 'MU':{'name':'マイクロン・テクノロジー (Micron)','cat':'us_stock'},
+  'AMAT':{'name':'アプライド・マテリアルズ','cat':'us_stock'}, 'LRCX':{'name':'ラムリサーチ (Lam Research)','cat':'us_stock'},
+  'KLAC':{'name':'KLAコーポレーション','cat':'us_stock'}, 'ADI':{'name':'アナログ・デバイセズ (ADI)','cat':'us_stock'},
+  'MRVL':{'name':'マーベル・テクノロジー (Marvell)','cat':'us_stock'}, 'NXPI':{'name':'NXPセミコンダクターズ','cat':'us_stock'},
+  'ON':{'name':'オン・セミコンダクター','cat':'us_stock'}, 'MCHP':{'name':'マイクロチップ・テクノロジー','cat':'us_stock'},
+  'SMCI':{'name':'スーパー・マイクロ (Super Micro)','cat':'us_stock'}, 'DELL':{'name':'デル・テクノロジーズ (Dell)','cat':'us_stock'},
+  'CSCO':{'name':'シスコシステムズ (Cisco)','cat':'us_stock'}, 'IBM':{'name':'IBM','cat':'us_stock'},
+  'ORCL':{'name':'オラクル (Oracle)','cat':'us_stock'}, 'CRM':{'name':'セールスフォース (Salesforce)','cat':'us_stock'},
+  'ADBE':{'name':'アドビ (Adobe)','cat':'us_stock'}, 'NFLX':{'name':'ネットフリックス (Netflix)','cat':'us_stock'},
+  'PLTR':{'name':'パランティア (Palantir)','cat':'us_stock'}, 'NOW':{'name':'サービスナウ (ServiceNow)','cat':'us_stock'},
+  'INTU':{'name':'インテュイット (Intuit)','cat':'us_stock'}, 'PANW':{'name':'パロアルトネットワークス','cat':'us_stock'},
+  'CRWD':{'name':'クラウドストライク (CrowdStrike)','cat':'us_stock'}, 'FTNT':{'name':'フォーティネット (Fortinet)','cat':'us_stock'},
+  'SNPS':{'name':'シノプシス (Synopsys)','cat':'us_stock'}, 'CDNS':{'name':'ケイデンス・デザイン (Cadence)','cat':'us_stock'},
+  'ADSK':{'name':'オートデスク (Autodesk)','cat':'us_stock'}, 'WDAY':{'name':'ワークデイ (Workday)','cat':'us_stock'},
+  'DDOG':{'name':'データドッグ (Datadog)','cat':'us_stock'}, 'ZS':{'name':'ゼットスケーラー (Zscaler)','cat':'us_stock'},
+  'TEAM':{'name':'アトラシアン (Atlassian)','cat':'us_stock'}, 'SNOW':{'name':'スノーフレイク (Snowflake)','cat':'us_stock'},
+  'UBER':{'name':'ウーバー (Uber)','cat':'us_stock'}, 'ABNB':{'name':'エアビーアンドビー (Airbnb)','cat':'us_stock'},
+  'BKNG':{'name':'ブッキングHD (Booking)','cat':'us_stock'}, 'DASH':{'name':'ドアダッシュ (DoorDash)','cat':'us_stock'},
+  'MELI':{'name':'メルカドリブレ (MercadoLibre)','cat':'us_stock'}, 'PYPL':{'name':'ペイパル (PayPal)','cat':'us_stock'},
+  'COIN':{'name':'コインベース (Coinbase)','cat':'us_stock'}, 'MSTR':{'name':'マイクロストラテジー (MicroStrategy)','cat':'us_stock'},
+  'ACN':{'name':'アクセンチュア (Accenture)','cat':'us_stock'}, 'ADP':{'name':'ADP','cat':'us_stock'},
+  'BRK-B':{'name':'バークシャー・ハサウェイ','cat':'us_stock'}, 'JPM':{'name':'JPモルガン・チェース','cat':'us_stock'},
+  'V':{'name':'ビザ (Visa)','cat':'us_stock'}, 'MA':{'name':'マスターカード (Mastercard)','cat':'us_stock'},
+  'BAC':{'name':'バンク・オブ・アメリカ','cat':'us_stock'}, 'WFC':{'name':'ウェルズ・ファーゴ','cat':'us_stock'},
+  'GS':{'name':'ゴールドマン・サックス','cat':'us_stock'}, 'MS':{'name':'モルガン・スタンレー','cat':'us_stock'},
+  'C':{'name':'シティグループ (Citigroup)','cat':'us_stock'}, 'AXP':{'name':'アメリカン・エキスプレス','cat':'us_stock'},
+  'BLK':{'name':'ブラックロック (BlackRock)','cat':'us_stock'}, 'SCHW':{'name':'チャールズ・シュワブ','cat':'us_stock'},
+  'COF':{'name':'キャピタル・ワン','cat':'us_stock'}, 'USB':{'name':'USバンコープ','cat':'us_stock'},
+  'BK':{'name':'BNYメロン','cat':'us_stock'}, 'TRV':{'name':'トラベラーズ (Travelers)','cat':'us_stock'},
+  'MET':{'name':'メットライフ (MetLife)','cat':'us_stock'}, 'AIG':{'name':'AIG','cat':'us_stock'},
+  'LLY':{'name':'イーライリリー (Eli Lilly)','cat':'us_stock'}, 'UNH':{'name':'ユナイテッドヘルス','cat':'us_stock'},
+  'JNJ':{'name':'ジョンソン・エンド・ジョンソン','cat':'us_stock'}, 'ABBV':{'name':'アッヴィ (AbbVie)','cat':'us_stock'},
+  'MRK':{'name':'メルク (Merck)','cat':'us_stock'}, 'PFE':{'name':'ファイザー (Pfizer)','cat':'us_stock'},
+  'AMGN':{'name':'アムジェン (Amgen)','cat':'us_stock'}, 'GILD':{'name':'ギリアド・サイエンシズ','cat':'us_stock'},
+  'ISRG':{'name':'インテュイティブ・サージカル','cat':'us_stock'}, 'VRTX':{'name':'バーテックス (Vertex)','cat':'us_stock'},
+  'REGN':{'name':'リジェネロン (Regeneron)','cat':'us_stock'}, 'TMO':{'name':'サーモフィッシャー','cat':'us_stock'},
+  'ABT':{'name':'アボット・ラボラトリーズ','cat':'us_stock'}, 'DHR':{'name':'ダナハー (Danaher)','cat':'us_stock'},
+  'BMY':{'name':'ブリストル・マイヤーズ','cat':'us_stock'}, 'MDT':{'name':'メドトロニック (Medtronic)','cat':'us_stock'},
+  'CVS':{'name':'CVSヘルス','cat':'us_stock'}, 'BIIB':{'name':'バイオジェン (Biogen)','cat':'us_stock'},
+  'MRNA':{'name':'モデルナ (Moderna)','cat':'us_stock'}, 'WMT':{'name':'ウォルマート (Walmart)','cat':'us_stock'},
+  'COST':{'name':'コストコ (Costco)','cat':'us_stock'}, 'HD':{'name':'ホーム・デポ (Home Depot)','cat':'us_stock'},
+  'LOW':{'name':'ロウズ (Lowe\'s)','cat':'us_stock'}, 'PG':{'name':'P&G','cat':'us_stock'},
+  'KO':{'name':'コカ・コーラ (Coca-Cola)','cat':'us_stock'}, 'PEP':{'name':'ペプシコ (PepsiCo)','cat':'us_stock'},
+  'MCD':{'name':'マクドナルド (McDonald\'s)','cat':'us_stock'}, 'SBUX':{'name':'スターバックス (Starbucks)','cat':'us_stock'},
+  'NKE':{'name':'ナイキ (Nike)','cat':'us_stock'}, 'DIS':{'name':'ウォルト・ディズニー (Disney)','cat':'us_stock'},
+  'TGT':{'name':'ターゲット (Target)','cat':'us_stock'}, 'PM':{'name':'フィリップ・モリス','cat':'us_stock'},
+  'MO':{'name':'アルトリア・グループ (Altria)','cat':'us_stock'}, 'MDLZ':{'name':'モンデリーズ (Mondelez)','cat':'us_stock'},
+  'CL':{'name':'コルゲート・パルモリーブ','cat':'us_stock'}, 'KHC':{'name':'クラフト・ハインツ','cat':'us_stock'},
+  'MNST':{'name':'モンスター・ビバレッジ','cat':'us_stock'}, 'LULU':{'name':'ルルレモン (Lululemon)','cat':'us_stock'},
+  'MAR':{'name':'マリオット (Marriott)','cat':'us_stock'}, 'ORLY':{'name':'オライリー・オートモーティブ','cat':'us_stock'},
+  'ROST':{'name':'ロス・ストアーズ (Ross)','cat':'us_stock'}, 'CPRT':{'name':'コパート (Copart)','cat':'us_stock'},
+  'FAST':{'name':'ファステナル (Fastenal)','cat':'us_stock'}, 'PAYX':{'name':'ペイチェックス (Paychex)','cat':'us_stock'},
+  'PCAR':{'name':'パッカー (PACCAR)','cat':'us_stock'}, 'CTAS':{'name':'シンタス (Cintas)','cat':'us_stock'},
+  'EA':{'name':'エレクトロニック・アーツ (EA)','cat':'us_stock'}, 'GM':{'name':'ゼネラル・モーターズ (GM)','cat':'us_stock'},
+  'F':{'name':'フォード・モーター (Ford)','cat':'us_stock'}, 'CAT':{'name':'キャタピラー (Caterpillar)','cat':'us_stock'},
+  'BA':{'name':'ボーイング (Boeing)','cat':'us_stock'}, 'GE':{'name':'GEエアロスペース (GE)','cat':'us_stock'},
+  'HON':{'name':'ハネウェル (Honeywell)','cat':'us_stock'}, 'RTX':{'name':'RTX (旧レイセオン)','cat':'us_stock'},
+  'LMT':{'name':'ロッキード・マーチン','cat':'us_stock'}, 'GD':{'name':'ゼネラル・ダイナミクス','cat':'us_stock'},
+  'DE':{'name':'ディア (John Deere)','cat':'us_stock'}, 'MMM':{'name':'スリーエム (3M)','cat':'us_stock'},
+  'EMR':{'name':'エマソン・エレクトリック','cat':'us_stock'}, 'UNP':{'name':'ユニオン・パシフィック','cat':'us_stock'},
+  'UPS':{'name':'UPS','cat':'us_stock'}, 'FDX':{'name':'フェデックス (FedEx)','cat':'us_stock'},
+  'CSX':{'name':'CSXコーポレーション','cat':'us_stock'}, 'XOM':{'name':'エクソンモービル (ExxonMobil)','cat':'us_stock'},
+  'CVX':{'name':'シェブロン (Chevron)','cat':'us_stock'}, 'COP':{'name':'コノコフィリップス','cat':'us_stock'},
+  'FANG':{'name':'ダイアモンドバック・エナジー','cat':'us_stock'}, 'BKR':{'name':'ベイカー・ヒューズ','cat':'us_stock'},
+  'SHW':{'name':'シャーウィン・ウィリアムズ','cat':'us_stock'}, 'LIN':{'name':'リンデ (Linde)','cat':'us_stock'},
+  'DOW':{'name':'ダウ (Dow Inc.)','cat':'us_stock'}, 'FCX':{'name':'フリーポート・マクモラン','cat':'us_stock'},
+  'TMUS':{'name':'TモバイルUS','cat':'us_stock'}, 'VZ':{'name':'ベライゾン (Verizon)','cat':'us_stock'},
+  'T':{'name':'AT&T','cat':'us_stock'}, 'CMCSA':{'name':'コムキャスト (Comcast)','cat':'us_stock'},
+  'CHTR':{'name':'チャーター・コミュニケーションズ','cat':'us_stock'}, 'NEE':{'name':'ネクステラ・エナジー','cat':'us_stock'},
+  'SO':{'name':'サザン・カンパニー','cat':'us_stock'}, 'DUK':{'name':'デューク・エナジー','cat':'us_stock'},
+  'AEP':{'name':'アメリカン・エレクトリック・パワー','cat':'us_stock'}, 'EXC':{'name':'エクセロン (Exelon)','cat':'us_stock'},
+  'CEG':{'name':'コンステレーション・エナジー','cat':'us_stock'}, 'AMT':{'name':'アメリカン・タワー','cat':'us_stock'},
+  'SPG':{'name':'サイモン・プロパティ','cat':'us_stock'},
+  // ── 日本株（個別銘柄） ─────────────────────────────────
+  '1332':{'name':'マルハニチロ','cat':'jp_stock'}, '1333':{'name':'ニッスイ','cat':'jp_stock'},
+  '1414':{'name':'ショーボンドホールディングス','cat':'jp_stock'}, '1515':{'name':'日鉄鉱業','cat':'jp_stock'},
+  '1605':{'name':'INPEX','cat':'jp_stock'}, '1662':{'name':'石油資源開発','cat':'jp_stock'},
+  '1719':{'name':'安藤・間','cat':'jp_stock'}, '1721':{'name':'コムシスHD','cat':'jp_stock'},
+  '1801':{'name':'大成建設','cat':'jp_stock'}, '1802':{'name':'大林組','cat':'jp_stock'},
+  '1803':{'name':'清水建設','cat':'jp_stock'}, '1808':{'name':'長谷工コーポレーション','cat':'jp_stock'},
+  '1812':{'name':'鹿島建設','cat':'jp_stock'}, '1860':{'name':'戸田建設','cat':'jp_stock'},
+  '1861':{'name':'熊谷組','cat':'jp_stock'}, '1878':{'name':'大東建託','cat':'jp_stock'},
+  '1893':{'name':'五洋建設','cat':'jp_stock'}, '1911':{'name':'住友林業','cat':'jp_stock'},
+  '1925':{'name':'大和ハウス工業','cat':'jp_stock'}, '1928':{'name':'積水ハウス','cat':'jp_stock'},
+  '1942':{'name':'関電工','cat':'jp_stock'}, '1944':{'name':'きんでん','cat':'jp_stock'},
+  '1951':{'name':'エクシオグループ','cat':'jp_stock'}, '1961':{'name':'三機工業','cat':'jp_stock'},
+  '1963':{'name':'日揮HD','cat':'jp_stock'}, '1969':{'name':'高砂熱学工業','cat':'jp_stock'},
+  '1980':{'name':'ダイダン','cat':'jp_stock'}, '2002':{'name':'日清製粉GHD','cat':'jp_stock'},
+  '2120':{'name':'LIFULL','cat':'jp_stock'}, '2127':{'name':'日本M&Aセンターホールディングス','cat':'jp_stock'},
+  '2146':{'name':'UTグループ','cat':'jp_stock'}, '2181':{'name':'パーソルHD','cat':'jp_stock'},
+  '2264':{'name':'森永乳業','cat':'jp_stock'}, '2267':{'name':'ヤクルト本社','cat':'jp_stock'},
+  '2269':{'name':'明治HD','cat':'jp_stock'}, '2282':{'name':'日本ハム','cat':'jp_stock'},
+  '2317':{'name':'システナ','cat':'jp_stock'}, '2331':{'name':'ALSOK','cat':'jp_stock'},
+  '2337':{'name':'いちご','cat':'jp_stock'}, '2353':{'name':'日本駐車場開発','cat':'jp_stock'},
+  '2371':{'name':'カカクコム','cat':'jp_stock'}, '2413':{'name':'エムスリー','cat':'jp_stock'},
+  '2432':{'name':'ディー・エヌ・エー','cat':'jp_stock'}, '2433':{'name':'博報堂DYホールディングス','cat':'jp_stock'},
+  '2492':{'name':'インフォマート','cat':'jp_stock'}, '2501':{'name':'サッポロHD','cat':'jp_stock'},
+  '2502':{'name':'アサヒGHD','cat':'jp_stock'}, '2503':{'name':'キリンHD','cat':'jp_stock'},
+  '2531':{'name':'宝HD','cat':'jp_stock'}, '2579':{'name':'コカ・コーラ ボトラーズジャパンホールディングス','cat':'jp_stock'},
+  '2585':{'name':'ライフドリンク カンパニー','cat':'jp_stock'}, '2587':{'name':'サントリービバレッジ&フード','cat':'jp_stock'},
+  '2670':{'name':'エービーシー・マート','cat':'jp_stock'}, '2726':{'name':'パルグループホールディングス','cat':'jp_stock'},
+  '2768':{'name':'双日','cat':'jp_stock'}, '2801':{'name':'キッコーマン','cat':'jp_stock'},
+  '2802':{'name':'味の素','cat':'jp_stock'}, '2871':{'name':'ニチレイ','cat':'jp_stock'},
+  '2897':{'name':'日清食品ホールディングス','cat':'jp_stock'}, '2914':{'name':'JT','cat':'jp_stock'},
+  '2931':{'name':'ユーグレナ','cat':'jp_stock'}, '3003':{'name':'ヒューリック','cat':'jp_stock'},
+  '3038':{'name':'神戸物産','cat':'jp_stock'}, '3064':{'name':'MonotaRO','cat':'jp_stock'},
+  '3086':{'name':'J.フロント リテイリング','cat':'jp_stock'}, '3088':{'name':'マツキヨココカラ&カンパニー','cat':'jp_stock'},
+  '3092':{'name':'ZOZO','cat':'jp_stock'}, '3099':{'name':'三越伊勢丹ホールディングス','cat':'jp_stock'},
+  '3101':{'name':'東洋紡','cat':'jp_stock'}, '3105':{'name':'日清紡ホールディングス','cat':'jp_stock'},
+  '3110':{'name':'日東紡績','cat':'jp_stock'}, '3116':{'name':'トヨタ紡織','cat':'jp_stock'},
+  '3132':{'name':'マクニカホールディングス','cat':'jp_stock'}, '3197':{'name':'すかいらーくホールディングス','cat':'jp_stock'},
+  '3231':{'name':'野村不動産ホールディングス','cat':'jp_stock'}, '3289':{'name':'東急不動産ホールディングス','cat':'jp_stock'},
+  '3291':{'name':'飯田グループホールディングス','cat':'jp_stock'}, '3315':{'name':'日本コークス工業','cat':'jp_stock'},
+  '3382':{'name':'セブン&アイHD','cat':'jp_stock'}, '3387':{'name':'クリエイト・レストランツ・ホールディングス','cat':'jp_stock'},
+  '3391':{'name':'ツルハホールディングス','cat':'jp_stock'}, '3401':{'name':'帝人','cat':'jp_stock'},
+  '3402':{'name':'東レ','cat':'jp_stock'}, '3405':{'name':'クラレ','cat':'jp_stock'},
+  '3407':{'name':'旭化成','cat':'jp_stock'}, '3415':{'name':'TOKYO BASE','cat':'jp_stock'},
+  '3436':{'name':'SUMCO','cat':'jp_stock'}, '3543':{'name':'コメダホールディングス','cat':'jp_stock'},
+  '3563':{'name':'FOOD & LIFE COMPANIES','cat':'jp_stock'}, '3626':{'name':'TIS','cat':'jp_stock'},
+  '3632':{'name':'グリーホールディングス','cat':'jp_stock'}, '3635':{'name':'コーエーテクモホールディングス','cat':'jp_stock'},
+  '3656':{'name':'KLab','cat':'jp_stock'}, '3659':{'name':'ネクソン','cat':'jp_stock'},
+  '3660':{'name':'アイスタイル','cat':'jp_stock'}, '3661':{'name':'エムアップホールディングス','cat':'jp_stock'},
+  '3673':{'name':'ブロードリーフ','cat':'jp_stock'}, '3687':{'name':'フィックスターズ','cat':'jp_stock'},
+  '3697':{'name':'SHIFT','cat':'jp_stock'}, '3774':{'name':'インターネットイニシアティブ','cat':'jp_stock'},
+  '3778':{'name':'さくらインターネット','cat':'jp_stock'}, '3853':{'name':'アステリア','cat':'jp_stock'},
+  '3861':{'name':'王子HD','cat':'jp_stock'}, '3863':{'name':'日本製紙','cat':'jp_stock'},
+  '3923':{'name':'ラクス','cat':'jp_stock'}, '3941':{'name':'レンゴー','cat':'jp_stock'},
+  '3994':{'name':'マネーフォワード','cat':'jp_stock'}, '4004':{'name':'レゾナック・HD','cat':'jp_stock'},
+  '4005':{'name':'住友化学','cat':'jp_stock'}, '4021':{'name':'日産化学','cat':'jp_stock'},
+  '4022':{'name':'ラサ工業','cat':'jp_stock'}, '4042':{'name':'東ソー','cat':'jp_stock'},
+  '4043':{'name':'トクヤマ','cat':'jp_stock'}, '4047':{'name':'関東電化工業','cat':'jp_stock'},
+  '4061':{'name':'デンカ','cat':'jp_stock'}, '4062':{'name':'イビデン','cat':'jp_stock'},
+  '4063':{'name':'信越化学工業','cat':'jp_stock'}, '4088':{'name':'エア・ウォーター','cat':'jp_stock'},
+  '4091':{'name':'日本酸素ホールディングス','cat':'jp_stock'}, '4114':{'name':'日本触媒','cat':'jp_stock'},
+  '4151':{'name':'協和キリン','cat':'jp_stock'}, '4180':{'name':'Appier Group','cat':'jp_stock'},
+  '4182':{'name':'三菱瓦斯化学','cat':'jp_stock'}, '4183':{'name':'三井化学','cat':'jp_stock'},
+  '4186':{'name':'東京応化工業','cat':'jp_stock'}, '4188':{'name':'三菱ケミカルG','cat':'jp_stock'},
+  '4202':{'name':'ダイセル','cat':'jp_stock'}, '4203':{'name':'住友ベークライト','cat':'jp_stock'},
+  '4204':{'name':'積水化学工業','cat':'jp_stock'}, '4205':{'name':'日本ゼオン','cat':'jp_stock'},
+  '4208':{'name':'UBE','cat':'jp_stock'}, '4307':{'name':'野村総研','cat':'jp_stock'},
+  '4324':{'name':'電通グループ','cat':'jp_stock'}, '4344':{'name':'ソースネクスト','cat':'jp_stock'},
+  '4368':{'name':'扶桑化学工業','cat':'jp_stock'}, '4369':{'name':'トリケミカル研究所','cat':'jp_stock'},
+  '4373':{'name':'シンプレクス・ホールディングス','cat':'jp_stock'}, '4385':{'name':'メルカリ','cat':'jp_stock'},
+  '4392':{'name':'FIG','cat':'jp_stock'}, '4403':{'name':'日油','cat':'jp_stock'},
+  '4443':{'name':'Sansan','cat':'jp_stock'}, '4452':{'name':'花王','cat':'jp_stock'},
+  '4478':{'name':'フリー','cat':'jp_stock'}, '4502':{'name':'武田薬品','cat':'jp_stock'},
+  '4503':{'name':'アステラス製薬','cat':'jp_stock'}, '4506':{'name':'住友ファーマ','cat':'jp_stock'},
+  '4507':{'name':'塩野義製薬','cat':'jp_stock'}, '4519':{'name':'中外製薬','cat':'jp_stock'},
+  '4523':{'name':'エーザイ','cat':'jp_stock'}, '4527':{'name':'ロート製薬','cat':'jp_stock'},
+  '4528':{'name':'小野薬品','cat':'jp_stock'}, '4536':{'name':'参天製薬','cat':'jp_stock'},
+  '4543':{'name':'テルモ','cat':'jp_stock'}, '4552':{'name':'JCRファーマ','cat':'jp_stock'},
+  '4565':{'name':'そーせいグループ','cat':'jp_stock'}, '4568':{'name':'第一三共','cat':'jp_stock'},
+  '4578':{'name':'大塚HD','cat':'jp_stock'}, '4587':{'name':'ペプチドリーム','cat':'jp_stock'},
+  '4612':{'name':'日本ペイントホールディングス','cat':'jp_stock'}, '4613':{'name':'関西ペイント','cat':'jp_stock'},
+  '4661':{'name':'オリエンタルランド','cat':'jp_stock'}, '4666':{'name':'パーク24','cat':'jp_stock'},
+  '4676':{'name':'フジ・メディア・ホールディングス','cat':'jp_stock'}, '4680':{'name':'ラウンドワン','cat':'jp_stock'},
+  '4684':{'name':'オービック','cat':'jp_stock'}, '4689':{'name':'LINEヤフー','cat':'jp_stock'},
+  '4704':{'name':'トレンドマイクロ','cat':'jp_stock'}, '4732':{'name':'ユー・エス・エス','cat':'jp_stock'},
+  '4751':{'name':'サイバーエージェント','cat':'jp_stock'}, '4755':{'name':'楽天グループ','cat':'jp_stock'},
+  '4768':{'name':'大塚商会','cat':'jp_stock'}, '4784':{'name':'GMOインターネット','cat':'jp_stock'},
+  '4901':{'name':'富士フイルムHD','cat':'jp_stock'}, '4902':{'name':'コニカミノルタ','cat':'jp_stock'},
+  '4911':{'name':'資生堂','cat':'jp_stock'}, '4912':{'name':'ライオン','cat':'jp_stock'},
+  '4980':{'name':'デクセリアルズ','cat':'jp_stock'}, '5016':{'name':'JX金属','cat':'jp_stock'},
+  '5019':{'name':'出光興産','cat':'jp_stock'}, '5020':{'name':'ENEOS HD','cat':'jp_stock'},
+  '5021':{'name':'コスモエネルギーホールディングス','cat':'jp_stock'}, '5032':{'name':'ANYCOLOR','cat':'jp_stock'},
+  '5074':{'name':'テスホールディングス','cat':'jp_stock'}, '5076':{'name':'インフロニア・ホールディングス','cat':'jp_stock'},
+  '5101':{'name':'横浜ゴム','cat':'jp_stock'}, '5105':{'name':'TOYO TIRE','cat':'jp_stock'},
+  '5108':{'name':'ブリヂストン','cat':'jp_stock'}, '5110':{'name':'住友ゴム工業','cat':'jp_stock'},
+  '5201':{'name':'AGC','cat':'jp_stock'}, '5214':{'name':'日本電気硝子','cat':'jp_stock'},
+  '5232':{'name':'住友大阪セメント','cat':'jp_stock'}, '5233':{'name':'太平洋セメント','cat':'jp_stock'},
+  '5301':{'name':'東海カーボン','cat':'jp_stock'}, '5332':{'name':'TOTO','cat':'jp_stock'},
+  '5333':{'name':'日本碍子','cat':'jp_stock'}, '5334':{'name':'日本特殊陶業','cat':'jp_stock'},
+  '5393':{'name':'ニチアス','cat':'jp_stock'}, '5401':{'name':'日本製鉄','cat':'jp_stock'},
+  '5406':{'name':'神戸製鋼所','cat':'jp_stock'}, '5411':{'name':'JFE HD','cat':'jp_stock'},
+  '5463':{'name':'丸一鋼管','cat':'jp_stock'}, '5471':{'name':'大同特殊鋼','cat':'jp_stock'},
+  '5541':{'name':'大平洋金属','cat':'jp_stock'}, '5563':{'name':'新日本電工','cat':'jp_stock'},
+  '5631':{'name':'日本製鋼所','cat':'jp_stock'}, '5703':{'name':'日本軽金属HD','cat':'jp_stock'},
+  '5706':{'name':'三井金属','cat':'jp_stock'}, '5707':{'name':'東邦亜鉛','cat':'jp_stock'},
+  '5711':{'name':'三菱マテリアル','cat':'jp_stock'}, '5713':{'name':'住友金属鉱山','cat':'jp_stock'},
+  '5714':{'name':'DOWA HD','cat':'jp_stock'}, '5715':{'name':'古河機械金属','cat':'jp_stock'},
+  '5726':{'name':'大阪チタニウムテクノロジーズ','cat':'jp_stock'}, '5741':{'name':'UACJ','cat':'jp_stock'},
+  '5801':{'name':'古河電工','cat':'jp_stock'}, '5802':{'name':'住友電工','cat':'jp_stock'},
+  '5803':{'name':'フジクラ','cat':'jp_stock'}, '5830':{'name':'いよぎんホールディングス','cat':'jp_stock'},
+  '5831':{'name':'しずおかフィナンシャルグループ','cat':'jp_stock'}, '5838':{'name':'楽天銀行','cat':'jp_stock'},
+  '5844':{'name':'京都フィナンシャルグループ','cat':'jp_stock'}, '5857':{'name':'AREホールディングス','cat':'jp_stock'},
+  '5929':{'name':'三和ホールディングス','cat':'jp_stock'}, '5938':{'name':'LIXIL','cat':'jp_stock'},
+  '5991':{'name':'日本発條','cat':'jp_stock'}, '6055':{'name':'ジャパンマテリアル','cat':'jp_stock'},
+  '6098':{'name':'リクルートHD','cat':'jp_stock'}, '6103':{'name':'オークマ','cat':'jp_stock'},
+  '6113':{'name':'アマダ','cat':'jp_stock'}, '6134':{'name':'FUJI','cat':'jp_stock'},
+  '6140':{'name':'旭ダイヤモンド工業','cat':'jp_stock'}, '6141':{'name':'DMG森精機','cat':'jp_stock'},
+  '6146':{'name':'ディスコ','cat':'jp_stock'}, '6178':{'name':'日本郵政','cat':'jp_stock'},
+  '6235':{'name':'オプトラン','cat':'jp_stock'}, '6254':{'name':'野村マイクロ・サイエンス','cat':'jp_stock'},
+  '6264':{'name':'マルマエ','cat':'jp_stock'}, '6268':{'name':'ナブテスコ','cat':'jp_stock'},
+  '6269':{'name':'三井海洋開発','cat':'jp_stock'}, '6301':{'name':'コマツ','cat':'jp_stock'},
+  '6302':{'name':'住友重機','cat':'jp_stock'}, '6305':{'name':'日立建機','cat':'jp_stock'},
+  '6315':{'name':'TOWA','cat':'jp_stock'}, '6323':{'name':'ローツェ','cat':'jp_stock'},
+  '6324':{'name':'ハーモニック・ドライブ・システムズ','cat':'jp_stock'}, '6326':{'name':'クボタ','cat':'jp_stock'},
+  '6330':{'name':'東洋エンジニアリング','cat':'jp_stock'}, '6361':{'name':'荏原製作所','cat':'jp_stock'},
+  '6367':{'name':'ダイキン工業','cat':'jp_stock'}, '6383':{'name':'ダイフク','cat':'jp_stock'},
+  '6407':{'name':'CKD','cat':'jp_stock'}, '6417':{'name':'SANKYO','cat':'jp_stock'},
+  '6448':{'name':'ブラザー工業','cat':'jp_stock'}, '6460':{'name':'セガサミーホールディングス','cat':'jp_stock'},
+  '6464':{'name':'ツバキ・ナカシマ','cat':'jp_stock'}, '6471':{'name':'日本精工','cat':'jp_stock'},
+  '6472':{'name':'NTN','cat':'jp_stock'}, '6473':{'name':'ジェイテクト','cat':'jp_stock'},
+  '6479':{'name':'ミネベアミツミ','cat':'jp_stock'}, '6480':{'name':'日本トムソン','cat':'jp_stock'},
+  '6481':{'name':'THK','cat':'jp_stock'}, '6501':{'name':'日立製作所','cat':'jp_stock'},
+  '6503':{'name':'三菱電機','cat':'jp_stock'}, '6504':{'name':'富士電機','cat':'jp_stock'},
+  '6506':{'name':'安川電機','cat':'jp_stock'}, '6508':{'name':'明電舎','cat':'jp_stock'},
+  '6525':{'name':'KOKUSAI ELECTRIC','cat':'jp_stock'}, '6526':{'name':'ソシオネクスト','cat':'jp_stock'},
+  '6532':{'name':'ベイカレント・C','cat':'jp_stock'}, '6544':{'name':'ジャパンエレベーターサービスホールディングス','cat':'jp_stock'},
+  '6584':{'name':'三櫻工業','cat':'jp_stock'}, '6586':{'name':'マキタ','cat':'jp_stock'},
+  '6590':{'name':'芝浦メカトロニクス','cat':'jp_stock'}, '6592':{'name':'マブチモーター','cat':'jp_stock'},
+  '6594':{'name':'ニデック','cat':'jp_stock'}, '6619':{'name':'ダブル・スコープ','cat':'jp_stock'},
+  '6632':{'name':'JVCケンウッド','cat':'jp_stock'}, '6645':{'name':'オムロン','cat':'jp_stock'},
+  '6674':{'name':'GSユアサ','cat':'jp_stock'}, '6701':{'name':'NEC','cat':'jp_stock'},
+  '6702':{'name':'富士通','cat':'jp_stock'}, '6703':{'name':'沖電気工業','cat':'jp_stock'},
+  '6706':{'name':'電気興業','cat':'jp_stock'}, '6723':{'name':'ルネサスエレクトロニクス','cat':'jp_stock'},
+  '6724':{'name':'セイコーエプソン','cat':'jp_stock'}, '6740':{'name':'ジャパンディスプレイ','cat':'jp_stock'},
+  '6752':{'name':'パナソニックHD','cat':'jp_stock'}, '6753':{'name':'シャープ','cat':'jp_stock'},
+  '6754':{'name':'アンリツ','cat':'jp_stock'}, '6758':{'name':'ソニーグループ','cat':'jp_stock'},
+  '6762':{'name':'TDK','cat':'jp_stock'}, '6768':{'name':'タムラ製作所','cat':'jp_stock'},
+  '6770':{'name':'アルプスアルパイン','cat':'jp_stock'}, '6779':{'name':'日本電波工業','cat':'jp_stock'},
+  '6841':{'name':'横河電機','cat':'jp_stock'}, '6845':{'name':'アズビル','cat':'jp_stock'},
+  '6849':{'name':'日本光電工業','cat':'jp_stock'}, '6857':{'name':'アドバンテスト','cat':'jp_stock'},
+  '6861':{'name':'キーエンス','cat':'jp_stock'}, '6869':{'name':'シスメックス','cat':'jp_stock'},
+  '6871':{'name':'日本マイクロニクス','cat':'jp_stock'}, '6902':{'name':'デンソー','cat':'jp_stock'},
+  '6920':{'name':'レーザーテック','cat':'jp_stock'}, '6923':{'name':'スタンレー電気','cat':'jp_stock'},
+  '6952':{'name':'カシオ計算機','cat':'jp_stock'}, '6954':{'name':'ファナック','cat':'jp_stock'},
+  '6958':{'name':'日本シイエムケイ','cat':'jp_stock'}, '6962':{'name':'大真空','cat':'jp_stock'},
+  '6963':{'name':'ローム','cat':'jp_stock'}, '6965':{'name':'浜松ホトニクス','cat':'jp_stock'},
+  '6966':{'name':'三井ハイテック','cat':'jp_stock'}, '6971':{'name':'京セラ','cat':'jp_stock'},
+  '6976':{'name':'太陽誘電','cat':'jp_stock'}, '6981':{'name':'村田製作所','cat':'jp_stock'},
+  '6988':{'name':'日東電工','cat':'jp_stock'}, '6996':{'name':'ニチコン','cat':'jp_stock'},
+  '6997':{'name':'日本ケミコン','cat':'jp_stock'}, '6999':{'name':'KOA','cat':'jp_stock'},
+  '7003':{'name':'三井E&S','cat':'jp_stock'}, '7004':{'name':'カナデビア','cat':'jp_stock'},
+  '7011':{'name':'三菱重工','cat':'jp_stock'}, '7012':{'name':'川崎重工業','cat':'jp_stock'},
+  '7013':{'name':'IHI','cat':'jp_stock'}, '7148':{'name':'FPG','cat':'jp_stock'},
+  '7167':{'name':'めぶきフィナンシャルグループ','cat':'jp_stock'}, '7173':{'name':'東京きらぼしフィナンシャルグループ','cat':'jp_stock'},
+  '7180':{'name':'九州フィナンシャルグループ','cat':'jp_stock'}, '7181':{'name':'かんぽ生命保険','cat':'jp_stock'},
+  '7182':{'name':'ゆうちょ銀行','cat':'jp_stock'}, '7186':{'name':'横浜フィナンシャルグループ','cat':'jp_stock'},
+  '7201':{'name':'日産自動車','cat':'jp_stock'}, '7202':{'name':'いすゞ自動車','cat':'jp_stock'},
+  '7203':{'name':'トヨタ自動車','cat':'jp_stock'}, '7211':{'name':'三菱自動車','cat':'jp_stock'},
+  '7220':{'name':'武蔵精密工業','cat':'jp_stock'}, '7238':{'name':'曙ブレーキ工業','cat':'jp_stock'},
+  '7245':{'name':'大同メタル工業','cat':'jp_stock'}, '7259':{'name':'アイシン','cat':'jp_stock'},
+  '7261':{'name':'マツダ','cat':'jp_stock'}, '7267':{'name':'ホンダ','cat':'jp_stock'},
+  '7269':{'name':'スズキ','cat':'jp_stock'}, '7270':{'name':'SUBARU','cat':'jp_stock'},
+  '7272':{'name':'ヤマハ発動機','cat':'jp_stock'}, '7276':{'name':'小糸製作所','cat':'jp_stock'},
+  '7309':{'name':'シマノ','cat':'jp_stock'}, '7327':{'name':'第四北越フィナンシャルグループ','cat':'jp_stock'},
+  '7337':{'name':'ひろぎんホールディングス','cat':'jp_stock'}, '7383':{'name':'ネットプロテクションズホールディングス','cat':'jp_stock'},
+  '7389':{'name':'あいちフィナンシャルグループ','cat':'jp_stock'}, '7419':{'name':'ノジマ','cat':'jp_stock'},
+  '7453':{'name':'良品計画','cat':'jp_stock'}, '7532':{'name':'パン・パシフィックHD','cat':'jp_stock'},
+  '7550':{'name':'ゼンショーホールディングス','cat':'jp_stock'}, '7599':{'name':'IDOM','cat':'jp_stock'},
+  '7649':{'name':'スギホールディングス','cat':'jp_stock'}, '7701':{'name':'島津製作所','cat':'jp_stock'},
+  '7731':{'name':'ニコン','cat':'jp_stock'}, '7733':{'name':'オリンパス','cat':'jp_stock'},
+  '7735':{'name':'SCREEN HD','cat':'jp_stock'}, '7741':{'name':'HOYA','cat':'jp_stock'},
+  '7747':{'name':'朝日インテック','cat':'jp_stock'}, '7751':{'name':'キヤノン','cat':'jp_stock'},
+  '7752':{'name':'リコー','cat':'jp_stock'}, '7762':{'name':'シチズン時計','cat':'jp_stock'},
+  '7832':{'name':'バンダイナムコHD','cat':'jp_stock'}, '7868':{'name':'広済堂ホールディングス','cat':'jp_stock'},
+  '7911':{'name':'TOPPANホールディングス','cat':'jp_stock'}, '7912':{'name':'大日本印刷','cat':'jp_stock'},
+  '7936':{'name':'アシックス','cat':'jp_stock'}, '7951':{'name':'ヤマハ','cat':'jp_stock'},
+  '7956':{'name':'ピジョン','cat':'jp_stock'}, '7974':{'name':'任天堂','cat':'jp_stock'},
+  '7984':{'name':'コクヨ','cat':'jp_stock'}, '8001':{'name':'伊藤忠商事','cat':'jp_stock'},
+  '8002':{'name':'丸紅','cat':'jp_stock'}, '8012':{'name':'長瀬産業','cat':'jp_stock'},
+  '8015':{'name':'豊田通商','cat':'jp_stock'}, '8016':{'name':'オンワードホールディングス','cat':'jp_stock'},
+  '8020':{'name':'兼松','cat':'jp_stock'}, '8031':{'name':'三井物産','cat':'jp_stock'},
+  '8035':{'name':'東京エレクトロン','cat':'jp_stock'}, '8053':{'name':'住友商事','cat':'jp_stock'},
+  '8058':{'name':'三菱商事','cat':'jp_stock'}, '8086':{'name':'ニプロ','cat':'jp_stock'},
+  '8088':{'name':'岩谷産業','cat':'jp_stock'}, '8113':{'name':'ユニ・チャーム','cat':'jp_stock'},
+  '8136':{'name':'サンリオ','cat':'jp_stock'}, '8219':{'name':'青山商事','cat':'jp_stock'},
+  '8227':{'name':'しまむら','cat':'jp_stock'}, '8233':{'name':'高島屋','cat':'jp_stock'},
+  '8252':{'name':'丸井グループ','cat':'jp_stock'}, '8253':{'name':'クレディセゾン','cat':'jp_stock'},
+  '8267':{'name':'イオン','cat':'jp_stock'}, '8282':{'name':'ケーズホールディングス','cat':'jp_stock'},
+  '8303':{'name':'SBI新生銀行','cat':'jp_stock'}, '8304':{'name':'あおぞら銀行','cat':'jp_stock'},
+  '8306':{'name':'三菱UFJ FG','cat':'jp_stock'}, '8308':{'name':'りそなHD','cat':'jp_stock'},
+  '8309':{'name':'三井住友トラストHD','cat':'jp_stock'}, '8316':{'name':'三井住友FG','cat':'jp_stock'},
+  '8331':{'name':'千葉銀行','cat':'jp_stock'}, '8334':{'name':'群馬銀行','cat':'jp_stock'},
+  '8338':{'name':'筑波銀行','cat':'jp_stock'}, '8341':{'name':'七十七銀行','cat':'jp_stock'},
+  '8346':{'name':'東邦銀行','cat':'jp_stock'}, '8354':{'name':'ふくおかFG','cat':'jp_stock'},
+  '8358':{'name':'スルガ銀行','cat':'jp_stock'}, '8359':{'name':'八十二長野銀行','cat':'jp_stock'},
+  '8366':{'name':'滋賀銀行','cat':'jp_stock'}, '8368':{'name':'百五銀行','cat':'jp_stock'},
+  '8410':{'name':'セブン銀行','cat':'jp_stock'}, '8411':{'name':'みずほFG','cat':'jp_stock'},
+  '8418':{'name':'山口フィナンシャルグループ','cat':'jp_stock'}, '8439':{'name':'東京センチュリー','cat':'jp_stock'},
+  '8473':{'name':'SBI HD','cat':'jp_stock'}, '8524':{'name':'北洋銀行','cat':'jp_stock'},
+  '8550':{'name':'栃木銀行','cat':'jp_stock'}, '8585':{'name':'オリエントコーポレーション','cat':'jp_stock'},
+  '8591':{'name':'オリックス','cat':'jp_stock'}, '8593':{'name':'三菱HCキャピタル','cat':'jp_stock'},
+  '8601':{'name':'大和証券G本社','cat':'jp_stock'}, '8604':{'name':'野村HD','cat':'jp_stock'},
+  '8616':{'name':'東海東京フィナンシャル・ホールディングス','cat':'jp_stock'}, '8628':{'name':'松井証券','cat':'jp_stock'},
+  '8630':{'name':'SOMPO HD','cat':'jp_stock'}, '8697':{'name':'日本取引所グループ','cat':'jp_stock'},
+  '8698':{'name':'マネックスグループ','cat':'jp_stock'}, '8714':{'name':'池田泉州ホールディングス','cat':'jp_stock'},
+  '8725':{'name':'MS&AD','cat':'jp_stock'}, '8729':{'name':'ソニーフィナンシャルグループ','cat':'jp_stock'},
+  '8750':{'name':'第一生命HD','cat':'jp_stock'}, '8766':{'name':'東京海上HD','cat':'jp_stock'},
+  '8795':{'name':'T&D HD','cat':'jp_stock'}, '8801':{'name':'三井不動産','cat':'jp_stock'},
+  '8802':{'name':'三菱地所','cat':'jp_stock'}, '8804':{'name':'東京建物','cat':'jp_stock'},
+  '8830':{'name':'住友不動産','cat':'jp_stock'}, '8848':{'name':'レオパレス21','cat':'jp_stock'},
+  '8897':{'name':'MIRARTHホールディングス','cat':'jp_stock'}, '9001':{'name':'東武鉄道','cat':'jp_stock'},
+  '9005':{'name':'東急','cat':'jp_stock'}, '9006':{'name':'京浜急行電鉄','cat':'jp_stock'},
+  '9007':{'name':'小田急電鉄','cat':'jp_stock'}, '9008':{'name':'京王電鉄','cat':'jp_stock'},
+  '9009':{'name':'京成電鉄','cat':'jp_stock'}, '9020':{'name':'JR東日本','cat':'jp_stock'},
+  '9021':{'name':'西日本旅客鉄道','cat':'jp_stock'}, '9022':{'name':'JR東海','cat':'jp_stock'},
+  '9023':{'name':'東京地下鉄','cat':'jp_stock'}, '9024':{'name':'西武ホールディングス','cat':'jp_stock'},
+  '9041':{'name':'近鉄グループホールディングス','cat':'jp_stock'}, '9042':{'name':'阪急阪神ホールディングス','cat':'jp_stock'},
+  '9048':{'name':'名古屋鉄道','cat':'jp_stock'}, '9064':{'name':'ヤマトHD','cat':'jp_stock'},
+  '9101':{'name':'日本郵船','cat':'jp_stock'}, '9104':{'name':'商船三井','cat':'jp_stock'},
+  '9107':{'name':'川崎汽船','cat':'jp_stock'}, '9142':{'name':'九州旅客鉄道','cat':'jp_stock'},
+  '9143':{'name':'SGホールディングス','cat':'jp_stock'}, '9147':{'name':'NIPPON EXPRESSホールディングス','cat':'jp_stock'},
+  '9201':{'name':'日本航空','cat':'jp_stock'}, '9202':{'name':'ANA HD','cat':'jp_stock'},
+  '9301':{'name':'三菱倉庫','cat':'jp_stock'}, '9412':{'name':'スカパーJSAT','cat':'jp_stock'},
+  '9424':{'name':'日本通信','cat':'jp_stock'}, '9432':{'name':'NTT','cat':'jp_stock'},
+  '9433':{'name':'KDDI','cat':'jp_stock'}, '9434':{'name':'ソフトバンク','cat':'jp_stock'},
+  '9501':{'name':'東京電力HD','cat':'jp_stock'}, '9502':{'name':'中部電力','cat':'jp_stock'},
+  '9503':{'name':'関西電力','cat':'jp_stock'}, '9504':{'name':'中国電力','cat':'jp_stock'},
+  '9505':{'name':'北陸電力','cat':'jp_stock'}, '9506':{'name':'東北電力','cat':'jp_stock'},
+  '9509':{'name':'北海道電力','cat':'jp_stock'}, '9513':{'name':'電源開発','cat':'jp_stock'},
+  '9519':{'name':'レノバ','cat':'jp_stock'}, '9531':{'name':'東京ガス','cat':'jp_stock'},
+  '9532':{'name':'大阪ガス','cat':'jp_stock'}, '9533':{'name':'東邦瓦斯','cat':'jp_stock'},
+  '9602':{'name':'東宝','cat':'jp_stock'}, '9603':{'name':'エイチ・アイ・エス','cat':'jp_stock'},
+  '9616':{'name':'共立メンテナンス','cat':'jp_stock'}, '9684':{'name':'スクウェア・エニックスHD','cat':'jp_stock'},
+  '9697':{'name':'カプコン','cat':'jp_stock'}, '9735':{'name':'セコム','cat':'jp_stock'},
+  '9831':{'name':'ヤマダホールディングス','cat':'jp_stock'}, '9843':{'name':'ニトリホールディングス','cat':'jp_stock'},
+  '9962':{'name':'ミスミグループ本社','cat':'jp_stock'}, '9983':{'name':'ファーストリテイリング','cat':'jp_stock'},
+  '9984':{'name':'ソフトバンクG','cat':'jp_stock'},
 };
 
 // MA設定（期間・色・シリーズキー）
@@ -1316,7 +1639,7 @@ const GRID_LINE_COLOR = 'rgba(255, 255, 255, 0.25)';
 function calcLwcTickSpan(high, low, scaleHeight) {
   if (!(high > low) || scaleHeight <= 2) return 1;
   const maxTickSpan = (high - low) * 28 / scaleHeight; // Math.ceil(11 * 2.5) = 28
-  const minMove = 0.01;
+  const minMove = high < 10 ? 0.0001 : 0.01;
   const eps = 1e-14;
   const dividerSets = [[2, 2.5, 2], [2, 2, 2.5], [2.5, 2, 2]];
   let best = Infinity;
@@ -1350,8 +1673,9 @@ function calcLwcTickSpan(high, low, scaleHeight) {
 function calcFinePriceStep(high, low, paneHeight) {
   const majorSpan = calcLwcTickSpan(high, low, paneHeight);
   const majorPx = paneHeight * majorSpan / (high - low);
+  const minMove = high < 10 ? 0.0001 : 0.01;
   let sub = majorPx >= 52 ? 2 : 1;
-  if (majorSpan / sub < 0.01 - 1e-9) sub = 1;
+  if (majorSpan / sub < minMove - 1e-9) sub = 1;
   return +(majorSpan / sub).toPrecision(10);
 }
 
@@ -2147,8 +2471,15 @@ function initChart() {
     onCrosshair(param, 'monthly');
   });
 
-  /* リサイズ対応 */
-  const ro = new ResizeObserver(() => resizeCharts());
+  /* リサイズ対応 (rAFでスロットリングしスマホ・タブレット回転時のガタつきを防止) */
+  let resizeRafId = null;
+  const ro = new ResizeObserver(() => {
+    if (resizeRafId !== null) return;
+    resizeRafId = requestAnimationFrame(() => {
+      resizeRafId = null;
+      resizeCharts();
+    });
+  });
   ro.observe(wrap);
 
   // 前回の表示モードを復元
@@ -2167,6 +2498,7 @@ function resizeCharts() {
   const wrap = document.getElementById('chart-wrap');
   if (!wrap || !chart) return;
   const w = wrap.clientWidth;
+  if (w <= 0) return;
   const pairs = [
     [chart,  'chart-daily'],
     [chartW, 'chart-weekly'],
@@ -2175,7 +2507,8 @@ function resizeCharts() {
   for (const [c, id] of pairs) {
     const el = document.getElementById(id);
     if (!c || !el || el.offsetParent === null) continue; // 非表示はスキップ
-    c.resize(w, el.clientHeight);
+    const h = el.clientHeight;
+    if (h > 0) c.resize(w, h);
   }
 }
 
@@ -2316,7 +2649,8 @@ function onCrosshair(param, source) {
 }
 
 function setMAText(period, val) {
-  const txt = val != null ? `MA${period}:${(+val).toFixed(1)}` : `MA${period}:---`;
+  const dec = (val != null && val < 10) ? 4 : 1;
+  const txt = val != null ? `MA${period}:${(+val).toFixed(dec)}` : `MA${period}:---`;
   if (lastMATextCache[period] === txt) return;
   lastMATextCache[period] = txt;
   const el = document.getElementById(`ma${period}t`);
@@ -2328,14 +2662,17 @@ function setMAText(period, val) {
 ====================================================== */
 function calcMA(candles, period) {
   const out = new Array(candles.length);
+  if (!candles.length) return out;
   let sum = 0;
   for (let i = 0; i < candles.length; i++) {
     sum += candles[i].close;
     if (i >= period) sum -= candles[i - period].close;
     const count = Math.min(i + 1, period);
+    const avg = sum / count;
+    const factor = avg < 10 ? 10000 : 10;
     out[i] = {
       time:  candles[i].time,
-      value: Math.round(sum / count * 10) / 10,
+      value: Math.round(avg * factor) / factor,
     };
   }
   return out;
@@ -2347,15 +2684,20 @@ function calcLastMA(candles, period) {
   const start = Math.max(0, n - period);
   let sum = 0;
   for (let i = start; i < n; i++) sum += candles[i].close;
+  const avg = sum / (n - start);
+  const factor = avg < 10 ? 10000 : 10;
   return {
     time:  candles[n - 1].time,
-    value: Math.round(sum / (n - start) * 10) / 10,
+    value: Math.round(avg * factor) / factor,
   };
 }
 
 /* ======================================================
-   データ読み込み（初回はfetch、2回目以降はキャッシュ）
+   データ読み込み（初回はfetch、2回目以降はLRUキャッシュ上限25銘柄）
 ====================================================== */
+const MAX_CACHE_ENTRIES = 25;
+let switchReqId = 0;
+
 async function loadData(code) {
   if (dataCache[code]) return dataCache[code];
 
@@ -2368,7 +2710,10 @@ async function loadData(code) {
     script.onload = () => {
       // INDEX_ プレフィックスの場合はJS変数名のハイフン等を変換
       const varName = code.replace(/-/g, '_').replace(/=/g, '_').replace(/\^/g, '');
-      const json = window[`STOCK_DATA_${varName}`];
+      const globalKey = `STOCK_DATA_${varName}`;
+      const json = window[globalKey];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      try { delete window[globalKey]; } catch (_) { window[globalKey] = undefined; }
       if (!json) {
         reject(new Error('データ形式が不正です'));
         return;
@@ -2393,12 +2738,17 @@ async function loadData(code) {
         mas[d.p] = calcMA(candles, d.p);
       }
 
+      // モバイル端末のメモリ圧迫を防ぐためキャッシュ上限を超えたら最古エントリを破棄
+      const cacheKeys = Object.keys(dataCache);
+      if (cacheKeys.length >= MAX_CACHE_ENTRIES) {
+        delete dataCache[cacheKeys[0]];
+      }
       dataCache[code] = { candles, closes, idxMap, mas, info: json };
-      document.head.removeChild(script); // 読み込み後はスクリプトタグを削除
       resolve(dataCache[code]);
     };
     
     script.onerror = () => {
+      if (script.parentNode) script.parentNode.removeChild(script);
       reject(new Error(
         `data/${code}.js が見つかりません。\n` +
         `先に fetch_data.py を実行してください:\n  python fetch_data.py`
@@ -2414,7 +2764,15 @@ async function loadData(code) {
 ====================================================== */
 async function switchStock(code) {
   if (!code) return;
+  const reqId = ++switchReqId;
+  stopAuto();
   currentCode = code;
+
+  // スマホで検索欄にフォーカスが残っている場合はソフトキーボードを閉じる
+  const searchEl = document.getElementById('stock-search');
+  if (searchEl && document.activeElement === searchEl && searchEl.options?.length !== 1) {
+    // 1文字ずつ入力中の自動切替時以外はキーボードを閉じないよう配慮
+  }
 
   // セレクト状態更新
   const sel = document.getElementById('stock-select');
@@ -2422,10 +2780,25 @@ async function switchStock(code) {
 
   try {
     const data = await loadData(code);
+    if (reqId !== switchReqId) return; // 連続タップ時は最新のリクエストのみ反映
     allCandles   = data.candles;
     allCloses    = data.closes;
     candleIdxMap = data.idxMap;
     allMAs       = data.mas;
+
+    // 通貨ペア等の価格桁数に応じて priceFormat を切り替え (ドルストレートや低位アルトコイン等は小数第4位)
+    const isSmallPrice = allCandles.some(c => c.close < 10);
+    const pf = isSmallPrice
+      ? { type: 'price', precision: 4, minMove: 0.0001 }
+      : { type: 'price', precision: 2, minMove: 0.01 };
+    for (const s of [candleSeries, candleSeriesW, candleSeriesM, closeSeries, closeSeriesW, closeSeriesM]) {
+      if (s) s.applyOptions({ priceFormat: pf });
+    }
+    for (const d of MA_DEFS) {
+      maSeries[d.p]?.applyOptions({ priceFormat: pf });
+      maSeriesW[d.p]?.applyOptions({ priceFormat: pf });
+      maSeriesM[d.p]?.applyOptions({ priceFormat: pf });
+    }
 
     // 最古のバー（表示窓を満たす位置）を初期カーソルに
     cursor = Math.min(winSize - 1, allCandles.length - 1);
@@ -2433,11 +2806,12 @@ async function switchStock(code) {
     // トレード状態のリセット (直後に refreshChart するため内部 refresh はスキップ)
     if (typeof resetTradeState === 'function') resetTradeState(true);
 
-    // 全データをセット
+    // 全データをセット & 最新バーへスクロール位置を同期
     refreshChart();
+    scrollKeepZoom();
 
     // ヘッダー更新
-    const info = STOCK_INFO[code];
+    const info = STOCK_INFO[code] || { name: code };
     document.getElementById('s-code').textContent = code;
     document.getElementById('s-name').textContent = info.name;
 
@@ -2445,6 +2819,7 @@ async function switchStock(code) {
     setLoading(false);
 
   } catch (err) {
+    if (reqId !== switchReqId) return;
     setLoading(true, `❌ ${err.message}`);
   }
 }
@@ -2772,14 +3147,18 @@ function displayOHLC(c, knownIdx) {
   priceEl.className = cls;
   chgEl.className   = cls;
 
-  priceEl.textContent = c.close.toLocaleString();
-  chgEl.textContent   =
-    `${change >= 0 ? '+' : ''}${change.toFixed(1)}（${change >= 0 ? '+' : ''}${pct.toFixed(2)}%）`;
+  const isSmallPrice = c.close < 10;
+  const fmtPrice = (v) => v.toLocaleString(undefined, { maximumFractionDigits: isSmallPrice ? 4 : 3 });
+  const chgDecimals = isSmallPrice ? 4 : ((currentCode.startsWith('INDEX_') || getStockCategory(currentCode) === 'us_stock') ? 2 : 1);
 
-  document.getElementById('v-high').textContent  = c.high.toLocaleString();
-  document.getElementById('v-low').textContent   = c.low.toLocaleString();
-  document.getElementById('v-open').textContent  = c.open.toLocaleString();
-  document.getElementById('v-close').textContent = c.close.toLocaleString();
+  priceEl.textContent = fmtPrice(c.close);
+  chgEl.textContent   =
+    `${change >= 0 ? '+' : ''}${change.toFixed(chgDecimals)}（${change >= 0 ? '+' : ''}${pct.toFixed(2)}%）`;
+
+  document.getElementById('v-high').textContent  = fmtPrice(c.high);
+  document.getElementById('v-low').textContent   = fmtPrice(c.low);
+  document.getElementById('v-open').textContent  = fmtPrice(c.open);
+  document.getElementById('v-close').textContent = fmtPrice(c.close);
 
   const vol = c.volume;
   document.getElementById('v-vol').textContent =
@@ -3460,7 +3839,8 @@ function resetTradeState(skipRefresh = false) {
 
 function fmtEntry(e) {
   if (e == null) return '-';
-  return (Math.round(e * 10) / 10).toLocaleString();
+  if (e < 10) return (Math.round(e * 10000) / 10000).toLocaleString(undefined, { maximumFractionDigits: 4 });
+  return (Math.round(e * 100) / 100).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
 function escapeHtml(str) {
@@ -3678,27 +4058,106 @@ function copyHistoryAI() {
 })();
 
 /* ======================================================
-   銘柄ドロップダウン初期化 / フィルタ
+   銘柄ドロップダウン初期化 / カテゴリ・検索フィルタ
 ====================================================== */
-function buildStockSelect(filter = '') {
+const STOCK_CATEGORIES = [
+  { id: 'index',     label: '株価指数' },
+  { id: 'fx',        label: '為替' },
+  { id: 'commodity', label: 'コモディティ' },
+  { id: 'crypto',    label: '仮想通貨' },
+  { id: 'us_stock',  label: '米国株' },
+  { id: 'jp_stock',  label: '日本株' },
+];
+
+let currentCategory = 'all';
+
+function getStockCategory(code) {
+  const info = STOCK_INFO[code];
+  if (info && info.cat) return info.cat;
+  if (code === 'INDEX_BTC' || code === 'INDEX_ETH') return 'crypto';
+  if (code === 'INDEX_USDJPY' || code === 'INDEX_EURJPY') return 'fx';
+  if (code === 'INDEX_WTI' || code === 'INDEX_GOLD') return 'commodity';
+  if (code.startsWith('INDEX_')) return 'index';
+  if (/^[A-Z-]+$/.test(code)) return 'us_stock';
+  return 'jp_stock';
+}
+
+function buildStockSelect(filter) {
   const sel = document.getElementById('stock-select');
-  const prev = sel.value || '1801';
+  const searchEl = document.getElementById('stock-search');
+  const rawFilter = filter !== undefined ? filter : (searchEl ? searchEl.value : '');
+  const prev = sel.value || currentCode || '1801';
   sel.innerHTML = '';
-  const q = filter.trim().toLowerCase();
+  const q = rawFilter.trim().toLowerCase();
   let firstCode = null;
-  for (const [code, info] of Object.entries(STOCK_INFO)) {
-    if (q && !code.includes(q) && !info.name.toLowerCase().includes(q)) continue;
+
+  const createOpt = (code, info) => {
     const opt = document.createElement('option');
     opt.value = code;
     opt.textContent = `${code} ${info.name}`;
-    sel.appendChild(opt);
     if (!firstCode) firstCode = code;
+    return opt;
+  };
+
+  if (currentCategory === 'all') {
+    const groups = {};
+    for (const c of STOCK_CATEGORIES) groups[c.id] = [];
+    for (const [code, info] of Object.entries(STOCK_INFO)) {
+      if (q && !code.toLowerCase().includes(q) && !info.name.toLowerCase().includes(q)) continue;
+      const cat = getStockCategory(code);
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push([code, info]);
+    }
+    for (const c of STOCK_CATEGORIES) {
+      const items = groups[c.id];
+      if (!items || !items.length) continue;
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = `${c.label} (${items.length})`;
+      for (const [code, info] of items) {
+        optgroup.appendChild(createOpt(code, info));
+      }
+      sel.appendChild(optgroup);
+    }
+  } else {
+    for (const [code, info] of Object.entries(STOCK_INFO)) {
+      if (getStockCategory(code) !== currentCategory) continue;
+      if (q && !code.toLowerCase().includes(q) && !info.name.toLowerCase().includes(q)) continue;
+      sel.appendChild(createOpt(code, info));
+    }
   }
+
   // 前の選択を復元、なければ先頭の銘柄
-  if (sel.querySelector(`option[value="${prev}"]`)) {
+  if (Array.from(sel.options).some(o => o.value === prev)) {
     sel.value = prev;
   } else if (firstCode) {
     sel.value = firstCode;
+  }
+}
+
+function pickRandomStock() {
+  const sel = document.getElementById('stock-select');
+  const searchEl = document.getElementById('stock-search');
+  // 検索ワードで1件以下に絞り込まれている場合は検索ワードをクリアしてカテゴリ全体から抽選
+  if (sel.options.length <= 1 && searchEl && searchEl.value.trim() !== '') {
+    searchEl.value = '';
+    buildStockSelect('');
+  }
+  const allOpts = Array.from(sel.options).map(o => o.value);
+  if (!allOpts.length) return;
+  const candidates = allOpts.length > 1 ? allOpts.filter(v => v !== currentCode) : allOpts;
+  const nextCode = candidates[Math.floor(Math.random() * candidates.length)];
+  sel.value = nextCode;
+  switchStock(nextCode);
+}
+
+function onCategoryChange(cat) {
+  currentCategory = cat || 'all';
+  const searchEl = document.getElementById('stock-search');
+  buildStockSelect(searchEl ? searchEl.value : '');
+  const sel = document.getElementById('stock-select');
+  // 現在の銘柄が選択カテゴリに含まれない場合は、カテゴリ内の銘柄へランダム切替
+  if (sel.value && sel.value !== currentCode) {
+    pickRandomStock();
   }
 }
 

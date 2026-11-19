@@ -19,20 +19,72 @@ YEARS = 5
 INDICES_TICKER = {
     "INDEX_N225": "^N225",
     "INDEX_TOPX": "1306.T",
+    "INDEX_JPX400": "1591.T",
+    "INDEX_GR250": "2516.T",
+    "INDEX_REIT": "1343.T",
     "INDEX_DJI": "^DJI",
     "INDEX_IXIC": "^IXIC",
+    "INDEX_NDX": "^NDX",
     "INDEX_GSPC": "^GSPC",
+    "INDEX_RUT": "^RUT",
+    "INDEX_DAX": "^GDAXI",
+    "INDEX_FTSE": "^FTSE",
+    "INDEX_CAC": "^FCHI",
+    "INDEX_STOXX50": "^STOXX50E",
+    "INDEX_NIFTY": "^NSEI",
+    "INDEX_SENSEX": "^BSESN",
+    "INDEX_TWII": "^TWII",
+    "INDEX_HSI": "^HSI",
+    "INDEX_SSEC": "000001.SS",
+    "INDEX_KOSPI": "^KS11",
+    "INDEX_ASX200": "^AXJO",
     "INDEX_WTI": "CL=F",
+    "INDEX_BRENT": "BZ=F",
+    "INDEX_NATGAS": "NG=F",
     "INDEX_GOLD": "GC=F",
+    "INDEX_SILVER": "SI=F",
+    "INDEX_PLATINUM": "PL=F",
+    "INDEX_PALLADIUM": "PA=F",
+    "INDEX_COPPER": "HG=F",
+    "INDEX_CORN": "ZC=F",
+    "INDEX_SOYBEAN": "ZS=F",
+    "INDEX_WHEAT": "ZW=F",
+    "INDEX_COFFEE": "KC=F",
+    "INDEX_SUGAR": "SB=F",
     "INDEX_USDJPY": "JPY=X",
     "INDEX_EURJPY": "EURJPY=X",
+    "INDEX_GBPJPY": "GBPJPY=X",
+    "INDEX_AUDJPY": "AUDJPY=X",
+    "INDEX_NZDJPY": "NZDJPY=X",
+    "INDEX_CADJPY": "CADJPY=X",
+    "INDEX_CHFJPY": "CHFJPY=X",
+    "INDEX_EURUSD": "EURUSD=X",
+    "INDEX_GBPUSD": "GBPUSD=X",
+    "INDEX_AUDUSD": "AUDUSD=X",
+    "INDEX_NZDUSD": "NZDUSD=X",
+    "INDEX_USDCHF": "USDCHF=X",
+    "INDEX_USDCAD": "USDCAD=X",
+    "INDEX_EURGBP": "EURGBP=X",
     "INDEX_BTC": "BTC-USD",
     "INDEX_ETH": "ETH-USD",
+    "INDEX_XRP": "XRP-USD",
+    "INDEX_SOL": "SOL-USD",
+    "INDEX_BNB": "BNB-USD",
+    "INDEX_DOGE": "DOGE-USD",
+    "INDEX_ADA": "ADA-USD",
+    "INDEX_AVAX": "AVAX-USD",
+    "INDEX_LINK": "LINK-USD",
+    "INDEX_LTC": "LTC-USD",
+    "INDEX_BCH": "BCH-USD",
+    "INDEX_DOT": "DOT-USD",
+    "INDEX_XLM": "XLM-USD",
 }
 
 def get_ticker_str(code):
     if code in INDICES_TICKER:
         return INDICES_TICKER[code]
+    if re.match(r"^[A-Z-]+$", code):
+        return code
     return f"{code}.T"
 
 def update_all():
@@ -102,7 +154,8 @@ def update_all():
                     if any(x != x for x in [o, h, l, c]):
                         continue
                         
-                    decimals = 2 if code.startswith("INDEX_") else 1
+                    is_idx_or_us = code.startswith("INDEX_") or bool(re.match(r"^[A-Z-]+$", code))
+                    decimals = (4 if c < 10 else 2) if is_idx_or_us else 1
                     candles.append({
                         "time": str(date_idx)[:10],
                         "open": round(o, decimals),
