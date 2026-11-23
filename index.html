@@ -34,7 +34,7 @@
       --green2:      #00897b;
 
       /* 移動平均線カラー（相場流指定） */
-      --ma3:   #ff80ab;   /* 明るいピンク */
+      --ma3:   #ff8ad8;   /* 明るいピンク */
       --ma5:   #f23645;   /* 赤   */
       --ma7:   #ffffff;   /* 白   */
       --ma10:  #00c853;   /* 緑   */
@@ -516,6 +516,14 @@
       text-align: center;
     }
 
+    #ma-dev {
+      display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 0 8px;
+      font-family: 'Roboto Mono', monospace; font-size: 9px; line-height: 1.2;
+      white-space: nowrap;
+    }
+    #ma-dev:empty { display: none; }
+    #ma-dev-section { padding: 2px 12px; }
+
     /* 表示窓サイズ選択 */
     #win-sel { display: flex; gap: 3px; margin-left: 4px; }
     .wbtn {
@@ -926,6 +934,7 @@
   </div>
 
   <div id="trade-panel">
+    <div class="tp-section" id="ma-dev-section"><div id="ma-dev"></div></div>
     <div class="tp-section" id="holding-section">
       <div class="tp-row">
         <span class="tp-lbl">評価損益</span>
@@ -1550,7 +1559,7 @@ const STOCK_INFO = {
 
 // MA設定（期間・色・シリーズキー）
 const MA_DEFS = [
-  { p: 3,   color: '#ff4081', label: 'MA3'   },
+  { p: 3,   color: '#ff8ad8', label: 'MA3'   },
   { p: 5,   color: '#f23645', label: 'MA5'   },
   { p: 7,   color: '#ffffff', label: 'MA7'   },
   { p: 10,  color: '#00c853', label: 'MA10'  },
@@ -3165,6 +3174,25 @@ function displayOHLC(c, knownIdx) {
     vol >= 10000 ? `${(vol / 10000).toFixed(1)}万株` : `${vol.toLocaleString()}株`;
 }
 
+/** 表示選択中のMAに対する乖離率（終値基準）を更新 */
+let lastBarIdx = null;
+function updateMADev(idx) {
+  const devEl = document.getElementById('ma-dev');
+  if (!devEl) return;
+  const c = idx != null ? allCandles[idx] : null;
+  if (!c) { devEl.innerHTML = ''; return; }
+  let html = '';
+  for (const d of MA_DEFS) {
+    if (!maVisible[d.p]) continue;
+    const arr = allMAs[d.p];
+    const m = arr && idx < arr.length && arr[idx] ? arr[idx].value : null;
+    if (!m) continue;
+    const r = (c.close - m) / m * 100;
+    html += `<span style="color:${d.color}">${d.p}:${r > 0 ? '+' : ''}${r.toFixed(1)}%</span>`;
+  }
+  devEl.innerHTML = html;
+}
+
 /** 指定インデックスのバー情報を表示 */
 function showBarInfo(idx) {
   if (!allCandles.length) return;
@@ -3184,6 +3212,9 @@ function showBarInfo(idx) {
       setMAText(d.p, null);
     }
   }
+
+  lastBarIdx = idx;
+  updateMADev(idx);
 
   updateTradePanel(c.close);
 }
@@ -3211,6 +3242,7 @@ function toggleMA(period) {
   maSeriesW[period].applyOptions({ visible: maVisible[period] });
   maSeriesM[period].applyOptions({ visible: maVisible[period] });
   document.getElementById(`mae-${period}`).classList.toggle('off', !maVisible[period]);
+  updateMADev(lastBarIdx);
 }
 
 /** ローソク足 表示/非表示 */
