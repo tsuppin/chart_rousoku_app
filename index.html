@@ -3716,7 +3716,10 @@ function updateTradePanel(currentPrice) {
   }
   
   const elUnPnl = document.getElementById('unrealized-pnl');
-  elUnPnl.textContent = Math.round(unPnl).toLocaleString() + '円';
+  const costBasis = [...tLotsSell, ...tLotsBuy].reduce((s, l) => s + l.price * l.unit, 0);
+  const unPnlPct = costBasis > 0 ? (unPnl / costBasis * 100) : null;
+  const fmtPct = p => p === null ? '' : ` (${p > 0 ? '+' : ''}${p.toFixed(2)}%)`;
+  elUnPnl.textContent = Math.round(unPnl).toLocaleString() + '円' + fmtPct(unPnlPct);
   elUnPnl.className = 'tp-val ' + (unPnl > 0 ? 'profit' : (unPnl < 0 ? 'loss' : ''));
 
   // 内訳の更新
@@ -3726,10 +3729,12 @@ function updateTradePanel(currentPrice) {
     if (elPnlSec) elPnlSec.style.display = '';
     elDetail.style.display = 'flex';
     document.getElementById('unpnl-sell-lbl').textContent = unPnlSell >= 0 ? '売益:' : '売損:';
-    document.getElementById('unpnl-sell').textContent = Math.round(unPnlSell).toLocaleString() + '円';
+    const costSell = tLotsSell.reduce((s, l) => s + l.price * l.unit, 0);
+    const costBuy = tLotsBuy.reduce((s, l) => s + l.price * l.unit, 0);
+    document.getElementById('unpnl-sell').textContent = Math.round(unPnlSell).toLocaleString() + '円' + fmtPct(costSell > 0 ? unPnlSell / costSell * 100 : null);
     document.getElementById('unpnl-sell-row').style.color = unPnlSell > 0 ? 'var(--up)' : (unPnlSell < 0 ? 'var(--down)' : 'inherit');
     document.getElementById('unpnl-buy-lbl').textContent = unPnlBuy >= 0 ? '買益:' : '買損:';
-    document.getElementById('unpnl-buy').textContent = Math.round(unPnlBuy).toLocaleString() + '円';
+    document.getElementById('unpnl-buy').textContent = Math.round(unPnlBuy).toLocaleString() + '円' + fmtPct(costBuy > 0 ? unPnlBuy / costBuy * 100 : null);
     document.getElementById('unpnl-buy-row').style.color = unPnlBuy > 0 ? 'var(--up)' : (unPnlBuy < 0 ? 'var(--down)' : 'inherit');
   } else {
     if (elPnlSec) elPnlSec.style.display = 'none';
