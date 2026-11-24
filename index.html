@@ -2675,8 +2675,8 @@ function setMAText(period, val) {
 /* 週足・月足のMA期間は日足期間と同じ長さに換算（週=5営業日、月=20営業日）。MA3・7は週足/月足では描画しない */
 const WM_MA_PERIODS = [5, 10, 20, 50, 100, 300];
 function wmMaOk(p) { return WM_MA_PERIODS.includes(p); }
-function maPeriodW(p) { return Math.max(1, Math.round(p / 5)); }
-function maPeriodM(p) { return Math.max(1, Math.round(p / 20)); }
+function maPeriodW(p) { return Math.max(1, Math.round(p)); }
+function maPeriodM(p) { return Math.max(1, p); }
 function calcMA(candles, period) {
   const out = new Array(candles.length);
   if (!candles.length) return out;
