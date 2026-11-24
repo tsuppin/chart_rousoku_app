@@ -2669,6 +2669,11 @@ function setMAText(period, val) {
 /* ======================================================
    MA計算（スライディングウィンドウ）
 ====================================================== */
+/* 週足・月足のMA期間は日足期間と同じ長さに換算（週=5営業日、月=20営業日）。MA3・7は週足/月足では描画しない */
+const WM_MA_PERIODS = [5, 10, 20, 50, 100, 300];
+function wmMaOk(p) { return WM_MA_PERIODS.includes(p); }
+function maPeriodW(p) { return Math.max(1, Math.round(p / 5)); }
+function maPeriodM(p) { return Math.max(1, Math.round(p / 20)); }
 function calcMA(candles, period) {
   const out = new Array(candles.length);
   if (!candles.length) return out;
@@ -2856,7 +2861,7 @@ function refreshChart() {
 
   // 週足MA
   for (const d of MA_DEFS) {
-    if (maVisible[d.p]) maSeriesW[d.p].setData(calcMA(curWeekly, d.p));
+    if (maVisible[d.p] && wmMaOk(d.p)) maSeriesW[d.p].setData(calcMA(curWeekly, maPeriodW(d.p)));
   }
 
   // 月足計算 & セット
@@ -2866,7 +2871,7 @@ function refreshChart() {
 
   // 月足MA
   for (const d of MA_DEFS) {
-    if (maVisible[d.p]) maSeriesM[d.p].setData(calcMA(curMonthly, d.p));
+    if (maVisible[d.p] && wmMaOk(d.p)) maSeriesM[d.p].setData(calcMA(curMonthly, maPeriodM(d.p)));
   }
 
   lastRenderedCursor = cursor;
@@ -2901,7 +2906,7 @@ function stepForwardChart() {
   candleSeriesW.update(lastW);
   if (closeVisible) closeSeriesW.update({ time: lastW.time, value: lastW.close });
   for (const d of MA_DEFS) {
-    if (maVisible[d.p]) maSeriesW[d.p].update(calcLastMA(curWeekly, d.p));
+    if (maVisible[d.p] && wmMaOk(d.p)) maSeriesW[d.p].update(calcLastMA(curWeekly, maPeriodW(d.p)));
   }
 
   // 月足差分更新
@@ -2919,7 +2924,7 @@ function stepForwardChart() {
   candleSeriesM.update(lastM);
   if (closeVisible) closeSeriesM.update({ time: lastM.time, value: lastM.close });
   for (const d of MA_DEFS) {
-    if (maVisible[d.p]) maSeriesM[d.p].update(calcLastMA(curMonthly, d.p));
+    if (maVisible[d.p] && wmMaOk(d.p)) maSeriesM[d.p].update(calcLastMA(curMonthly, maPeriodM(d.p)));
   }
 
   lastRenderedCursor = cursor;
@@ -2959,14 +2964,14 @@ function stepBackwardChart() {
     candleSeriesW.update(lastW);
     if (closeVisible) closeSeriesW.update({ time: lastW.time, value: lastW.close });
     for (const d of MA_DEFS) {
-      if (maVisible[d.p]) maSeriesW[d.p].update(calcLastMA(curWeekly, d.p));
+      if (maVisible[d.p] && wmMaOk(d.p)) maSeriesW[d.p].update(calcLastMA(curWeekly, maPeriodW(d.p)));
     }
   } else {
     curWeekly.pop();
     candleSeriesW.setData(curWeekly);
     if (closeVisible) closeSeriesW.setData(curWeekly.map(x => ({ time: x.time, value: x.close })));
     for (const d of MA_DEFS) {
-      if (maVisible[d.p]) maSeriesW[d.p].setData(calcMA(curWeekly, d.p));
+      if (maVisible[d.p] && wmMaOk(d.p)) maSeriesW[d.p].setData(calcMA(curWeekly, maPeriodW(d.p)));
     }
   }
 
@@ -2988,14 +2993,14 @@ function stepBackwardChart() {
     candleSeriesM.update(lastM);
     if (closeVisible) closeSeriesM.update({ time: lastM.time, value: lastM.close });
     for (const d of MA_DEFS) {
-      if (maVisible[d.p]) maSeriesM[d.p].update(calcLastMA(curMonthly, d.p));
+      if (maVisible[d.p] && wmMaOk(d.p)) maSeriesM[d.p].update(calcLastMA(curMonthly, maPeriodM(d.p)));
     }
   } else {
     curMonthly.pop();
     candleSeriesM.setData(curMonthly);
     if (closeVisible) closeSeriesM.setData(curMonthly.map(x => ({ time: x.time, value: x.close })));
     for (const d of MA_DEFS) {
-      if (maVisible[d.p]) maSeriesM[d.p].setData(calcMA(curMonthly, d.p));
+      if (maVisible[d.p] && wmMaOk(d.p)) maSeriesM[d.p].setData(calcMA(curMonthly, maPeriodM(d.p)));
     }
   }
 
@@ -3235,8 +3240,8 @@ function toggleMA(period) {
   maVisible[period] = !maVisible[period];
   if (maVisible[period] && allCandles.length) {
     maSeries[period].setData(allMAs[period].slice(0, cursor + 1));
-    maSeriesW[period].setData(calcMA(curWeekly, period));
-    maSeriesM[period].setData(calcMA(curMonthly, period));
+    if (wmMaOk(period)) maSeriesW[period].setData(calcMA(curWeekly, maPeriodW(period)));
+    if (wmMaOk(period)) maSeriesM[period].setData(calcMA(curMonthly, maPeriodM(period)));
   }
   maSeries[period].applyOptions({ visible: maVisible[period] });
   maSeriesW[period].applyOptions({ visible: maVisible[period] });
