@@ -4020,19 +4020,28 @@ function buildHistoryAI() {
   const loseTrades = closeTrades.filter(h => h.pnl < 0);
   const winRate = closeTrades.length > 0 ? ((winTrades.length / closeTrades.length) * 100).toFixed(1) : '0.0';
 
-  let text = `# トレード履歴分析依頼\n\n`;
-  text += `以下のトレードシミュレーション履歴を分析し、\n`;
-  text += `1. 勝ちトレードと負けトレードの特徴・共通点\n`;
-  text += `2. 移動平均線や相場環境に対するエントリー・イグジット判断の妥当性\n`;
-  text += `3. メモ（心理・反省・根拠）を踏まえた勝率・リスクリワードの改善提案\n`;
-  text += `を日本語で具体的・実践的に提示してください。\n\n`;
+  let text = `### トレード履歴分析依頼（相場流シミュレーション検証）\n\n`;
+  text += `以下のトレードシミュレーション履歴を、**相場流（うねり取り・ショットガン・ショートトレード）の技術体系**に基づき客観的・実践的に分析してください。\n\n`;
 
-  text += `## トレード基本情報\n`;
-  text += `- 対象銘柄: ${currentCode} (${stockName})\n`;
-  text += `- 決済トレード数: ${closeTrades.length}回 (勝: ${winTrades.length}回 / 負: ${loseTrades.length}回 / 勝率: ${winRate}%)\n`;
-  text += `- 総実現損益: ${tRealizedPnL > 0 ? '+' : ''}${tRealizedPnL.toLocaleString()}円\n\n`;
+  text += `#### 分析・出力の要望\n`;
+  text += `1. **定量分析と勝敗パターン**\n`;
+  text += `   - 勝敗別の平均利益率・平均損失率・プロフィットファクター・リスクリワード比（RR比）\n`;
+  text += `   - 勝ちトレードと負けトレードにおける「移動平均線乖離率（SMA5/20/50/100）」や「日柄・保有期間」の数値的差異\n`;
+  text += `2. **相場環境・局面判断の妥当性**\n`;
+  text += `   - 移動平均線の並び（PPP / 逆PPP / 密集期・交錯期）に対するエントリー方向の整合性\n`;
+  text += `   - 「買い玉に対する売りヘッジ」と「単発の空売り」それぞれの機能度の検証\n`;
+  text += `   - 下半身・逆下半身・ローソク足の陰陽確認、節目（キリ番・主要移動平均線）での対応の妥当性\n`;
+  text += `3. **ルール化・改善提案（アクションプラン）**\n`;
+  text += `   - 致命傷や無駄な損失（高値掴み・突っ込み売り・塩漬け・往復ビンタなど）を機械的に排除する「エントリー除外フィルター（乖離率や移動平均線の向き）」\n`;
+  text += `   - 損切り・利確を迷わず実行するための「具体的なIF-THENルール（◯◯になったら一括決済）」\n`;
+  text += `   - 建玉配分（ロット操作・分割売買）の最適化ルール\n\n`;
 
-  text += `## 取引履歴明細 (時系列)\n`;
+  text += `#### トレード基本情報\n`;
+  text += `* 対象銘柄: ${currentCode} (${stockName})\n`;
+  text += `* 決済トレード数: ${closeTrades.length}回 (勝: ${winTrades.length}回 / 負: ${loseTrades.length}回 / 勝率: ${winRate}%)\n`;
+  text += `* 総実現損益: ${tRealizedPnL > 0 ? '+' : ''}${tRealizedPnL.toLocaleString()}円\n\n`;
+
+  text += `#### 取引履歴明細 (時系列)\n`;
 
   // 時系列順（古い順）にしてAIがトレードの流れを追いやすくする
   const chronological = [...tHistory].reverse();
@@ -4040,7 +4049,7 @@ function buildHistoryAI() {
   chronological.forEach((h, i) => {
     const num = i + 1;
     const isClose = h.entry != null;
-    text += `\n### [No.${num}] ${toYYMMDD(h.time)} ${h.type}\n`;
+    text += `\n##### [No.${num}] ${toYYMMDD(h.time)} ${h.type}\n`;
     text += `- 操作: ${h.type} / 数量: ${h.qty}株\n`;
     text += `- 約定価格: ${h.price.toLocaleString()}円`;
     if (isClose) {
