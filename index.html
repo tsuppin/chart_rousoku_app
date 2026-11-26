@@ -946,6 +946,7 @@
       </div>
       <div class="tp-actions">
         <button class="tp-btn" onclick="showHistory()">🕒 取引履歴</button>
+        <button class="tp-btn" onclick="goMiddle()" title="取得したチャート期間の真ん中へ移動">🎯 中央</button>
       </div>
     </div>
 
@@ -3096,6 +3097,17 @@ function goLatest() {
   if (!allCandles.length) return;
   flushPendingBeforeJump(allCandles.length - 1);
   cursor = allCandles.length - 1;
+  refreshChart();
+  showBarInfo(cursor);
+}
+
+/** 取得したチャート期間の真ん中へジャンプ */
+function goMiddle() {
+  if (!allCandles.length) return;
+  stopAuto();
+  const midIdx = Math.floor((allCandles.length - 1) / 2);
+  flushPendingBeforeJump(midIdx);
+  cursor = midIdx;
   refreshChart();
   showBarInfo(cursor);
 }
