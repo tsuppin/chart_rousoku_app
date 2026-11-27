@@ -1891,10 +1891,10 @@ let pendingZoomChart = null;
 let pendingZoomPointX = 0;
 let pendingZoomScale = 0;
 
-/** 指定チャートの座標 pointX を基準に滑らかに拡大縮小し、他チャートの barSpacing も同期 */
+/** 日足チャートの座標 pointX を基準に滑らかに拡大縮小し、週足・月足も同じ表示期間に同期 */
 function zoomChartAtPoint(targetChart, pointX, scaleDelta) {
-  if (!targetChart || !scaleDelta) return;
-  const c = targetChart;
+  const c = chart || targetChart;
+  if (!c || !scaleDelta) return;
   const curSp = c.timeScale().options().barSpacing || currentBarSpacing;
   if ((scaleDelta > 0 && curSp >= MAX_BAR_SPACING) || (scaleDelta < 0 && curSp <= MIN_BAR_SPACING)) return;
 
@@ -1909,20 +1909,12 @@ function zoomChartAtPoint(targetChart, pointX, scaleDelta) {
       if (Math.abs(adjScale) > 1e-4) {
         model.qc(pointX, adjScale);
       }
-      const sp = Math.max(MIN_BAR_SPACING, Math.min(MAX_BAR_SPACING, c.timeScale().options().barSpacing || curSp));
-      currentBarSpacing = sp;
-      for (const other of [chart, chartW, chartM]) {
-        if (other && other !== c) {
-          other.timeScale().applyOptions({ barSpacing: sp });
-        }
-      }
+      currentBarSpacing = Math.max(MIN_BAR_SPACING, Math.min(MAX_BAR_SPACING, c.timeScale().options().barSpacing || curSp));
     } else {
       currentBarSpacing = Math.max(MIN_BAR_SPACING, Math.min(MAX_BAR_SPACING, curSp * (1 + scaleDelta * 0.1)));
-      const opts = { barSpacing: currentBarSpacing };
-      chart?.timeScale().applyOptions(opts);
-      chartW?.timeScale().applyOptions(opts);
-      chartM?.timeScale().applyOptions(opts);
+      c.timeScale().applyOptions({ barSpacing: currentBarSpacing });
     }
+    syncWMToDailyRange();
   } finally {
     syncingBarSpacing = false;
   }
@@ -2403,25 +2395,20 @@ function initChart() {
   compactTimeScale(chartW);
   compactTimeScale(chartM);
 
-  // PCホイールや時間軸ドラッグによるbarSpacing変更を3チャート間で同期
-  for (const c of [chart, chartW, chartM]) {
-    c.timeScale().subscribeVisibleLogicalRangeChange(() => {
-      if (syncingBarSpacing) return;
-      const sp = c.timeScale().options().barSpacing;
-      if (sp && Math.abs(sp - currentBarSpacing) > 0.1) {
-        syncingBarSpacing = true;
-        currentBarSpacing = Math.max(MIN_BAR_SPACING, Math.min(MAX_BAR_SPACING, sp));
-        for (const other of [chart, chartW, chartM]) {
-          if (other && other !== c) {
-            other.timeScale().applyOptions({ barSpacing: currentBarSpacing });
-          }
-        }
-        requestAnimationFrame(() => {
-          syncingBarSpacing = false;
-        });
-      }
-    });
-  }
+  // 日足の表示期間（スクロール・ズーム）を週足・月足へ同期
+  chart.timeScale().subscribeVisibleLogicalRangeChange(() => {
+    if (syncingBarSpacing) return;
+    const sp = chart.timeScale().options().barSpacing;
+    if (sp) currentBarSpacing = Math.max(MIN_BAR_SPACING, Math.min(MAX_BAR_SPACING, sp));
+    syncingBarSpacing = true;
+    try {
+      syncWMToDailyRange();
+    } finally {
+      requestAnimationFrame(() => {
+        syncingBarSpacing = false;
+      });
+    }
+  });
 
   // --- MAシリーズ作成 (日足・週足・月足共通) ---
   for (const d of MA_DEFS) {
@@ -2515,6 +2502,7 @@ function resizeCharts() {
     const h = el.clientHeight;
     if (h > 0) c.resize(w, h);
   }
+  syncWMToDailyRange();
 }
 
 /** 表示チャート集合を適用 (例: 'dwm' = 全表示, 'd' = 日足のみ) */
@@ -2871,6 +2859,7 @@ function refreshChart() {
   }
 
   lastRenderedCursor = cursor;
+  syncWMToDailyRange();
 }
 
 /** 1日進む際のO(1)差分更新 */
@@ -2924,6 +2913,7 @@ function stepForwardChart() {
   }
 
   lastRenderedCursor = cursor;
+  syncWMToDailyRange();
 }
 
 /** 1日戻る際の高速更新（同一週・同一月内なら週足・月足は末尾バーのみ update） */
@@ -3001,6 +2991,7 @@ function stepBackwardChart() {
   }
 
   lastRenderedCursor = cursor;
+  syncWMToDailyRange();
 }
 
 /* ======================================================
@@ -3025,8 +3016,6 @@ function updateVisibleRange() {
     
     syncingBarSpacing = true;
     chart?.timeScale().applyOptions(timeOptions);
-    chartW?.timeScale().applyOptions(timeOptions);
-    chartM?.timeScale().applyOptions(timeOptions);
 
     scrollKeepZoom();
 
@@ -3039,14 +3028,90 @@ function updateVisibleRange() {
   }
 }
 
-/** ズームを保持したまま最新バーを画面右端にスクロール */
+/** 日足インデックスに対応する週足・月足の連続インデックス位置（バー内補間付き）を算出 */
+function dailyIdxToSeriesPos(dIdx, seriesCandles, type) {
+  if (!allCandles.length || !seriesCandles.length) return 0;
+  const maxD = Math.min(cursor, allCandles.length - 1);
+  const clamped = Math.max(0, Math.min(maxD, Math.floor(dIdx)));
+  const c = allCandles[clamped];
+  const key = type === 'W'
+    ? (c._monday || (c._monday = getMonday(c.time)))
+    : (c._month || (c._month = toDateStr(c.time).slice(0, 7) + '-01'));
+
+  // 二分探索で該当週/月バーを検索
+  let lo = 0, hi = seriesCandles.length - 1, k = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const t = toDateStr(seriesCandles[mid].time);
+    if (t === key) { k = mid; break; }
+    if (t < key) { k = mid; lo = mid + 1; }
+    else { hi = mid - 1; }
+  }
+
+  // 同じ週/月内に属する日足の範囲からバー内位置を補間
+  let startD = clamped;
+  while (startD > 0) {
+    const p = allCandles[startD - 1];
+    const pk = type === 'W'
+      ? (p._monday || (p._monday = getMonday(p.time)))
+      : (p._month || (p._month = toDateStr(p.time).slice(0, 7) + '-01'));
+    if (pk !== key) break;
+    startD--;
+  }
+  let endD = clamped;
+  while (endD < maxD) {
+    const n = allCandles[endD + 1];
+    const nk = type === 'W'
+      ? (n._monday || (n._monday = getMonday(n.time)))
+      : (n._month || (n._month = toDateStr(n.time).slice(0, 7) + '-01'));
+    if (nk !== key) break;
+    endD++;
+  }
+  const spanD = Math.max(1, endD - startD + 1);
+  const frac = Math.max(0, Math.min(0.99, (dIdx - startD) / spanD));
+  return k + frac;
+}
+
+/** 日足チャートのろうそく足の大きさと右端の日付位置に合わせて週足・月足を同期 */
+let lastSyncedWMSpacing = -1;
+function syncWMToDailyRange() {
+  if (!chart || !allCandles.length) return;
+  try {
+    const sp = chart.timeScale().options().barSpacing || currentBarSpacing;
+    const needApplySpacing = Math.abs(sp - lastSyncedWMSpacing) > 0.05;
+    if (needApplySpacing) lastSyncedWMSpacing = sp;
+
+    const scrollPos = chart.timeScale().scrollPosition();
+    const maxD = Math.min(cursor, allCandles.length - 1);
+    const lr = chart.timeScale().getVisibleLogicalRange();
+
+    const applySync = (targetChart, seriesCandles, type) => {
+      if (!targetChart || !seriesCandles.length) return;
+      if (needApplySpacing) {
+        targetChart.timeScale().applyOptions({ barSpacing: sp, rightOffset: 3 });
+      }
+      if (scrollPos >= -0.5 || !lr || lr.to >= maxD) {
+        targetChart.timeScale().scrollToRealTime();
+      } else {
+        const dTo = Math.max(0, Math.min(maxD, lr.to));
+        const pTo = dailyIdxToSeriesPos(dTo, seriesCandles, type);
+        const offset = Math.max(0, (seriesCandles.length - 1) - pTo);
+        targetChart.timeScale().scrollToPosition(-offset, false);
+      }
+    };
+
+    applySync(chartW, curWeekly, 'W');
+    applySync(chartM, curMonthly, 'M');
+  } catch (_) {}
+}
+
+/** ズームを保持したまま最新バーを画面右端にスクロール（週足・月足も同期） */
 function scrollKeepZoom() {
   const prevSync = syncingBarSpacing;
   syncingBarSpacing = true;
   try {
     chart.timeScale().scrollToRealTime();
-    chartW.timeScale().scrollToRealTime();
-    chartM.timeScale().scrollToRealTime();
+    syncWMToDailyRange();
   } catch (_) {}
   syncingBarSpacing = prevSync;
 }
@@ -3132,10 +3197,7 @@ function zoomIn() {
   }
   syncingBarSpacing = true;
   currentBarSpacing = Math.min(currentBarSpacing * 1.15, MAX_BAR_SPACING);
-  const options = { barSpacing: currentBarSpacing };
-  chart.timeScale().applyOptions(options);
-  chartW.timeScale().applyOptions(options);
-  chartM.timeScale().applyOptions(options);
+  chart.timeScale().applyOptions({ barSpacing: currentBarSpacing });
   syncingBarSpacing = false;
   scrollKeepZoom();
 }
@@ -3149,10 +3211,7 @@ function zoomOut() {
   }
   syncingBarSpacing = true;
   currentBarSpacing = Math.max(currentBarSpacing / 1.15, MIN_BAR_SPACING);
-  const options = { barSpacing: currentBarSpacing };
-  chart.timeScale().applyOptions(options);
-  chartW.timeScale().applyOptions(options);
-  chartM.timeScale().applyOptions(options);
+  chart.timeScale().applyOptions({ barSpacing: currentBarSpacing });
   syncingBarSpacing = false;
   scrollKeepZoom();
 }
@@ -4111,8 +4170,7 @@ function jumpToHistory(idx) {
   const prevSync = syncingBarSpacing;
   syncingBarSpacing = true;
   scrollChartToIndex(chart, targetIdx, cursor + 1);
-  scrollChartToIndex(chartW, wi, curWeekly.length);
-  scrollChartToIndex(chartM, mi, curMonthly.length);
+  syncWMToDailyRange();
   requestAnimationFrame(() => { syncingBarSpacing = prevSync; });
 
   closeHistory();
