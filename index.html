@@ -4137,7 +4137,26 @@ function showHistory() {
   document.getElementById('hist-modal').classList.add('open');
 }
 
-/** 取引履歴の行クリック: その取引のローソク足までカーソルを移動 */
+/** 指定インデックスが画面内に収まるようにチャートをスクロール（前後の期間も表示） */
+function scrollChartToIndex(targetChart, targetIdx, totalLen) {
+  if (!targetChart || totalLen <= 0) return;
+  try {
+    const ts = targetChart.timeScale();
+    const lr = ts.getVisibleLogicalRange();
+    const span = (lr && lr.to > lr.from) ? (lr.to - lr.from) : winSize;
+    const maxTo = totalLen - 1 + 3;
+    let to = targetIdx + span * 0.3;
+    if (to > maxTo) to = maxTo;
+    let from = to - span;
+    if (from < -3) {
+      from = -3;
+      to = Math.min(maxTo, from + span);
+    }
+    ts.setVisibleLogicalRange({ from, to });
+  } catch (_) {}
+}
+
+/** 取引履歴の行クリック: そこまで表示された期間のチャートを保ったまま、その取引のローソク足付近へ移動 */
 function jumpToHistory(idx) {
   const h = tHistory[idx];
   if (!h) return;
@@ -4148,11 +4167,46 @@ function jumpToHistory(idx) {
   const target = toDateStr(h.time);
   const ci = allCandles.findIndex(c => toDateStr(c.time) === target);
   if (ci < 0) return;
-  const newCursor = Math.max(0, Math.min(ci, allCandles.length - 1));
-  flushPendingBeforeJump(newCursor);
-  cursor = newCursor;
-  refreshChart();
-  showBarInfo(cursor);
+  const targetIdx = Math.max(0, Math.min(ci, allCandles.length - 1));
+  if (targetIdx > cursor) {
+    flushPendingBeforeJump(targetIdx);
+    cursor = targetIdx;
+    refreshChart();
+    showBarInfo(cursor);
+  } else {
+    // すでに表示済みの期間（cursorまで）を消さずに維持し、情報表示だけ対象日へ更新
+    const c = allCandles[targetIdx];
+    if (c) {
+      displayOHLC(c, targetIdx);
+      document.getElementById('date-badge').textContent = toYYMMDD(c.time);
+      for (const d of MA_DEFS) {
+        const arr = allMAs[d.p];
+        setMAText(d.p, (arr && targetIdx < arr.length) ? arr[targetIdx].value : null);
+      }
+      lastBarIdx = targetIdx;
+      updateMADev(targetIdx);
+    }
+  }
+
+  // 週足・月足で対象日を含むインデックスを検索
+  let wi = 0;
+  for (let i = 0; i < curWeekly.length; i++) {
+    if (toDateStr(curWeekly[i].time) <= target) wi = i;
+    else break;
+  }
+  let mi = 0;
+  for (let i = 0; i < curMonthly.length; i++) {
+    if (toDateStr(curMonthly[i].time) <= target) mi = i;
+    else break;
+  }
+
+  const prevSync = syncingBarSpacing;
+  syncingBarSpacing = true;
+  scrollChartToIndex(chart, targetIdx, cursor + 1);
+  scrollChartToIndex(chartW, wi, curWeekly.length);
+  scrollChartToIndex(chartM, mi, curMonthly.length);
+  requestAnimationFrame(() => { syncingBarSpacing = prevSync; });
+
   closeHistory();
 }
 
