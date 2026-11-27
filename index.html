@@ -1623,7 +1623,8 @@ let allMAs       = {};     // { period: [{time,value}] }
 let curWeekly    = [];     // 現在カーソル時点の週足配列
 let curMonthly   = [];     // 現在カーソル時点の月足配列
 let lastRenderedCursor = -1;
-let cursor       = 0;      // 現在の最終表示バーのインデックス
+let cursor       = 0;      // 現在の注目バーのインデックス
+let maxCursor    = 0;      // これまでにめくって表示した最大のバーインデックス
 let winSize      = 60;     // 表示バー数
 
 let candleVisible = true;  // ローソク足 表示状態
@@ -2355,7 +2356,7 @@ function initChart() {
       timeVisible:    true,
       secondsVisible: false,
       barSpacing:     6,
-      rightOffset:    3,
+      rightOffset:    0,
     },
     kineticScroll: {
       touch: true,
@@ -2439,9 +2440,7 @@ function initChart() {
     try {
       syncWMToDailyRange();
     } finally {
-      requestAnimationFrame(() => {
-        syncingBarSpacing = false;
-      });
+      syncingBarSpacing = false;
     }
   });
 
@@ -2835,6 +2834,8 @@ async function switchStock(code) {
 
     // 最古のバー（表示窓を満たす位置）を初期カーソルに
     cursor = Math.min(winSize - 1, allCandles.length - 1);
+    maxCursor = cursor;
+    clearCursorCrosshair();
 
     // トレード状態のリセット (直後に refreshChart するため内部 refresh はスキップ)
     if (typeof resetTradeState === 'function') resetTradeState(true);
@@ -2863,18 +2864,19 @@ async function switchStock(code) {
 function refreshChart() {
   hideAllRangeBoxes();
   if (!allCandles.length) return;
+  const renderEnd = Math.max(cursor, maxCursor);
   
-  const slicedD = allCandles.slice(0, cursor + 1);
+  const slicedD = allCandles.slice(0, renderEnd + 1);
   candleSeries.setData(slicedD);
-  if (closeVisible) closeSeries.setData(allCloses.slice(0, cursor + 1));
+  if (closeVisible) closeSeries.setData(allCloses.slice(0, renderEnd + 1));
 
   // 日足MA (表示中のシリーズのみセットして高速化)
   for (const d of MA_DEFS) {
-    if (maVisible[d.p]) maSeries[d.p].setData(allMAs[d.p].slice(0, cursor + 1));
+    if (maVisible[d.p]) maSeries[d.p].setData(allMAs[d.p].slice(0, renderEnd + 1));
   }
 
   // 週足計算 & セット
-  curWeekly = calcWeeklyData(allCandles, cursor);
+  curWeekly = calcWeeklyData(allCandles, renderEnd);
   candleSeriesW.setData(curWeekly);
   if (closeVisible) closeSeriesW.setData(curWeekly.map(c => ({ time: c.time, value: c.close })));
 
@@ -2884,7 +2886,7 @@ function refreshChart() {
   }
 
   // 月足計算 & セット
-  curMonthly = calcMonthlyData(allCandles, cursor);
+  curMonthly = calcMonthlyData(allCandles, renderEnd);
   candleSeriesM.setData(curMonthly);
   if (closeVisible) closeSeriesM.setData(curMonthly.map(c => ({ time: c.time, value: c.close })));
 
@@ -2893,7 +2895,7 @@ function refreshChart() {
     if (maVisible[d.p] && wmMaOk(d.p)) maSeriesM[d.p].setData(calcMA(curMonthly, maPeriodM(d.p)));
   }
 
-  lastRenderedCursor = cursor;
+  lastRenderedCursor = renderEnd;
   syncWMToDailyRange();
 }
 
@@ -3046,7 +3048,7 @@ function updateVisibleRange() {
 
     const timeOptions = {
       barSpacing: spacing,
-      rightOffset: 3,
+      rightOffset: 0,
     };
     
     syncingBarSpacing = true;
@@ -3066,7 +3068,7 @@ function updateVisibleRange() {
 /** 日足インデックスに対応する週足・月足の連続インデックス位置（バー内補間付き）を算出 */
 function dailyIdxToSeriesPos(dIdx, seriesCandles, type) {
   if (!allCandles.length || !seriesCandles.length) return 0;
-  const maxD = Math.min(cursor, allCandles.length - 1);
+  const maxD = Math.min(Math.max(cursor, maxCursor), allCandles.length - 1);
   const clamped = Math.max(0, Math.min(maxD, Math.floor(dIdx)));
   const c = allCandles[clamped];
   const key = type === 'W'
@@ -3117,21 +3119,19 @@ function syncWMToDailyRange() {
     if (needApplySpacing) lastSyncedWMSpacing = sp;
 
     const scrollPos = chart.timeScale().scrollPosition();
-    const maxD = Math.min(cursor, allCandles.length - 1);
-    const lr = chart.timeScale().getVisibleLogicalRange();
+    const maxD = Math.min(Math.max(cursor, maxCursor), allCandles.length - 1);
 
     const applySync = (targetChart, seriesCandles, type) => {
       if (!targetChart || !seriesCandles.length) return;
       if (needApplySpacing) {
-        targetChart.timeScale().applyOptions({ barSpacing: sp, rightOffset: 3 });
+        targetChart.timeScale().applyOptions({ barSpacing: sp, rightOffset: 0 });
       }
-      if (scrollPos >= -0.5 || !lr || lr.to >= maxD) {
-        targetChart.timeScale().scrollToRealTime();
+      if (scrollPos >= 2.95) {
+        targetChart.timeScale().scrollToPosition(scrollPos, false);
       } else {
-        const dTo = Math.max(0, Math.min(maxD, lr.to));
+        const dTo = Math.max(0, Math.min(maxD, maxD + scrollPos - 3));
         const pTo = dailyIdxToSeriesPos(dTo, seriesCandles, type);
-        const offset = Math.max(0, (seriesCandles.length - 1) - pTo);
-        targetChart.timeScale().scrollToPosition(-offset, false);
+        targetChart.timeScale().scrollToPosition(3 + (pTo - (seriesCandles.length - 1)), false);
       }
     };
 
@@ -3140,12 +3140,13 @@ function syncWMToDailyRange() {
   } catch (_) {}
 }
 
-/** ズームを保持したまま最新バーを画面右端にスクロール（週足・月足も同期） */
+/** ズームを保持したまま現在の注目バー(cursor)を画面右側基準にスクロール（週足・月足も同期） */
 function scrollKeepZoom() {
   const prevSync = syncingBarSpacing;
   syncingBarSpacing = true;
   try {
-    chart.timeScale().scrollToRealTime();
+    const maxD = Math.min(Math.max(cursor, maxCursor), allCandles.length - 1);
+    chart.timeScale().scrollToPosition(3 - (maxD - cursor), false);
     syncWMToDailyRange();
   } catch (_) {}
   syncingBarSpacing = prevSync;
@@ -3167,23 +3168,63 @@ function runThrottledStep(fn) {
    ナビゲーション
 ====================================================== */
 
+/** 注目バー（cursor）にクロスヘアを合わせて確認しやすくする */
+function setCursorCrosshair(idx) {
+  if (!allCandles.length || idx < 0 || idx >= allCandles.length) return;
+  const c = allCandles[idx];
+  try {
+    if (chart && candleSeries) chart.setCrosshairPosition(c.close, c.time, candleSeries);
+    if (chartW && candleSeriesW && curWeekly.length) {
+      const monday = c._monday || (c._monday = getMonday(c.time));
+      const wBar = curWeekly.find(w => w.time === monday);
+      if (wBar) chartW.setCrosshairPosition(wBar.close, wBar.time, candleSeriesW);
+    }
+    if (chartM && candleSeriesM && curMonthly.length) {
+      const monthKey = c._month || (c._month = toDateStr(c.time).slice(0, 7) + '-01');
+      const mBar = curMonthly.find(m => m.time === monthKey);
+      if (mBar) chartM.setCrosshairPosition(mBar.close, mBar.time, candleSeriesM);
+    }
+  } catch (_) {}
+}
+
+function clearCursorCrosshair() {
+  try {
+    chart?.clearCrosshairPosition();
+    chartW?.clearCrosshairPosition();
+    chartM?.clearCrosshairPosition();
+  } catch (_) {}
+}
+
 /** 1日進む（高速: update()を使用、ズーム保持） */
 function goNext() {
   if (!allCandles.length || cursor >= allCandles.length - 1) return;
   cursor++;
-  executePending(cursor);    // 翌日寄付約定モードの注文をこのバーの始値で約定
-  settleExpiredLots(cursor); // 制度信用6ヶ月期日到来の建玉をこのバーの始値で自動決済
-  stepForwardChart();        // O(1)差分更新
-  scrollKeepZoom();
+  if (cursor > maxCursor) {
+    maxCursor = cursor;
+    executePending(cursor);    // 翌日寄付約定モードの注文をこのバーの始値で約定
+    settleExpiredLots(cursor); // 制度信用6ヶ月期日到来の建玉をこのバーの始値で自動決済
+    stepForwardChart();        // O(1)差分更新
+    scrollKeepZoom();
+    clearCursorCrosshair();
+  } else {
+    scrollKeepZoom();
+    if (cursor === maxCursor) {
+      clearCursorCrosshair();
+    } else {
+      setCursorCrosshair(cursor);
+    }
+  }
+  lastCrosshairKey = 'cursor_' + cursor;
   showBarInfo(cursor);
 }
 
-/** 1日戻る（高速差分更新、ズーム保持） */
+/** 1日戻る（めくったチャートは残したまま、画面右側基準で注目バーを左へ移動） */
 function goPrev() {
   if (!allCandles.length || cursor <= 0) return;
   cursor--;
-  stepBackwardChart();
   scrollKeepZoom();
+  setCursorCrosshair(cursor);
+  lastCrosshairKey = 'cursor_' + cursor;
   showBarInfo(cursor);
 }
 
@@ -3192,6 +3233,8 @@ function goLatest() {
   if (!allCandles.length) return;
   flushPendingBeforeJump(allCandles.length - 1);
   cursor = allCandles.length - 1;
+  maxCursor = cursor;
+  clearCursorCrosshair();
   refreshChart();
   showBarInfo(cursor);
 }
@@ -3203,6 +3246,8 @@ function goMiddle() {
   const midIdx = Math.floor((allCandles.length - 1) / 2);
   flushPendingBeforeJump(midIdx);
   cursor = midIdx;
+  maxCursor = cursor;
+  clearCursorCrosshair();
   refreshChart();
   showBarInfo(cursor);
 }
@@ -3354,7 +3399,7 @@ function setLoading(show, msg = '') {
 function toggleMA(period) {
   maVisible[period] = !maVisible[period];
   if (maVisible[period] && allCandles.length) {
-    maSeries[period].setData(allMAs[period].slice(0, cursor + 1));
+    maSeries[period].setData(allMAs[period].slice(0, Math.max(cursor, maxCursor) + 1));
     if (wmMaOk(period)) maSeriesW[period].setData(calcMA(curWeekly, maPeriodW(period)));
     if (wmMaOk(period)) maSeriesM[period].setData(calcMA(curMonthly, maPeriodM(period)));
   }
@@ -3380,7 +3425,7 @@ function toggleCandle() {
 function toggleClose() {
   closeVisible = !closeVisible;
   if (closeVisible && allCandles.length) {
-    closeSeries.setData(allCloses.slice(0, cursor + 1));
+    closeSeries.setData(allCloses.slice(0, Math.max(cursor, maxCursor) + 1));
     closeSeriesW.setData(curWeekly.map(c => ({ time: c.time, value: c.close })));
     closeSeriesM.setData(curMonthly.map(c => ({ time: c.time, value: c.close })));
   }
@@ -3534,6 +3579,8 @@ function applyInit() {
   const newCursor = Math.max(minIdx, Math.min(idx, allCandles.length - 1));
   flushPendingBeforeJump(newCursor);
   cursor = newCursor;
+  maxCursor = cursor;
+  clearCursorCrosshair();
   refreshChart();
   showBarInfo(cursor);
   closeModal();
@@ -4172,9 +4219,11 @@ function jumpToHistory(idx) {
   const ci = allCandles.findIndex(c => toDateStr(c.time) === target);
   if (ci < 0) return;
   const targetIdx = Math.max(0, Math.min(ci, allCandles.length - 1));
-  if (targetIdx > cursor) {
+  if (targetIdx > maxCursor) {
     flushPendingBeforeJump(targetIdx);
     cursor = targetIdx;
+    maxCursor = cursor;
+    clearCursorCrosshair();
     refreshChart();
     showBarInfo(cursor);
   } else {
