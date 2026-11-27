@@ -122,18 +122,14 @@
       background: var(--hover); color: var(--text); font-weight: 400;
     }
     #btn-random {
-      background: var(--hover); border: 1px solid var(--border); color: var(--text);
-      padding: 4px 8px; border-radius: 5px; font-size: 13px; line-height: 1.2;
-      cursor: pointer; flex-shrink: 0; transition: background .15s, border-color .15s;
+      flex: 0 0 auto; padding: 0 8px; font-size: 13px;
     }
-    #btn-random:hover { background: var(--active); border-color: var(--accent); }
     #btn-random:active { transform: scale(0.95); }
     @media (max-width:600px) {
       #stock-selector { gap: 3px; }
       #category-select { max-width: 62px; padding: 4px 2px; font-size: 11px; }
       #stock-search { width: 52px; padding: 4px 4px; font-size: 11px; }
       #stock-select { max-width: 96px; padding: 4px 2px; font-size: 11px; }
-      #btn-random { padding: 3px 6px; font-size: 12px; }
     }
 
     /* 価格情報エリア */
@@ -143,18 +139,25 @@
     #s-code   { font-size: 11px; color: var(--dim); }
     #s-name   { font-size: 13px; font-weight: 500; }
 
-    #price-group { display: flex; align-items: baseline; gap: 5px; flex-shrink: 0; white-space: nowrap; }
+    #price-group {
+      display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; white-space: nowrap;
+      border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px;
+      transition: border-color 0.15s;
+    }
+    #price-group.up   { border-color: var(--up); }
+    #price-group.down { border-color: var(--down); }
+    #price-group.neu  { border-color: var(--border); }
     #cur-price {
-      font-size: 20px;
+      font-size: 17px;
       font-weight: 700;
       font-family: 'Roboto Mono', monospace;
-      letter-spacing: -1px;
+      letter-spacing: -0.5px;
       min-width: 0;
     }
-    #price-chg { font-size: 11px; font-family: 'Roboto Mono', monospace; white-space: nowrap; }
+    #price-chg { font-size: 10px; font-family: 'Roboto Mono', monospace; white-space: nowrap; }
 
     .ohlcv {
-      display: flex; gap: 8px; flex-shrink: 0; min-width: 0;
+      display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 0;
       overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
       -webkit-overflow-scrolling: touch; margin-bottom: 3px;
     }
@@ -851,21 +854,12 @@
     </select>
     <input id="stock-search" type="text" placeholder="コード/名前" oninput="filterStocks(this.value)">
     <select id="stock-select" onchange="switchStock(this.value)"></select>
-    <button id="btn-random" onclick="pickRandomStock()" title="選択中のカテゴリからランダム表示">🎲</button>
   </div>
   </div>
 
-  <div class="vdiv"></div>
-
-  <div id="price-area">
-    <div id="stock-id" style="display: none;">
-      <span id="s-code">----</span>
-      <span id="s-name">----</span>
-    </div>
-    <div id="price-group">
-      <span id="cur-price" class="neu">---</span>
-      <span id="price-chg" class="neu">---</span>
-    </div>
+  <div id="stock-id" style="display: none;">
+    <span id="s-code">----</span>
+    <span id="s-name">----</span>
   </div>
 </div>
 
@@ -897,6 +891,10 @@
   <div id="trade-panel">
     <div class="tp-section" id="ma-dev-section">
       <div class="ohlcv">
+        <div id="price-group" class="neu">
+          <span id="cur-price" class="neu">---</span>
+          <span id="price-chg" class="neu">---</span>
+        </div>
         <div class="oitem"><span class="olbl">高値</span><span class="oval" id="v-high">---</span></div>
         <div class="oitem"><span class="olbl">安値</span><span class="oval" id="v-low">---</span></div>
         <div class="oitem"><span class="olbl">始値</span><span class="oval" id="v-open">---</span></div>
@@ -918,6 +916,7 @@
       <div class="tp-actions">
         <button class="tp-btn" onclick="showHistory()">🕒 取引履歴</button>
         <button class="tp-btn" onclick="goMiddle()" title="取得したチャート期間の真ん中へ移動">🎯 中央</button>
+        <button id="btn-random" class="tp-btn" onclick="pickRandomStock()" title="選択中のカテゴリからランダム表示">🎲</button>
         <button class="tp-btn" onclick="openDisplayModal()" title="MA・ロウソク・終値の表示と線の太さを設定">⚙️ 表示</button>
       </div>
     </div>
@@ -1557,7 +1556,9 @@ const MA_DEFS = [
   { p: 10,  color: '#00c853', label: 'MA10'  },
   { p: 14,  color: '#00e5ff', label: 'MA14'  },
   { p: 20,  color: '#2196f3', label: 'MA20'  },
+  { p: 30,  color: '#64b5f6', label: 'MA30'  },
   { p: 50,  color: '#ab47bc', label: 'MA50'  },
+  { p: 60,  color: '#ce93d8', label: 'MA60'  },
   { p: 100, color: '#ff9800', label: 'MA100' },
   { p: 300, color: '#fdd835', label: 'MA300' },
 ];
@@ -2654,7 +2655,7 @@ function setMAText(period, val) {
    MA計算（スライディングウィンドウ）
 ====================================================== */
 /* 週足・月足のMA期間は日足期間と同じ長さに換算（週=5営業日、月=20営業日）。MA3・7は週足/月足では描画しない */
-const WM_MA_PERIODS = [5, 10, 20, 50, 100, 300];
+const WM_MA_PERIODS = [5, 10, 20, 30, 50, 60, 100, 300];
 function wmMaOk(p) { return WM_MA_PERIODS.includes(p); }
 function maPeriodW(p) { return Math.max(1, Math.round(p)); }
 function maPeriodM(p) { return Math.max(1, p); }
@@ -3225,8 +3226,10 @@ function displayOHLC(c, knownIdx) {
 
   const cls = change > 0 ? 'up' : (change < 0 ? 'down' : 'neu');
 
+  const groupEl = document.getElementById('price-group');
   const priceEl = document.getElementById('cur-price');
   const chgEl   = document.getElementById('price-chg');
+  if (groupEl) groupEl.className = cls;
   priceEl.className = cls;
   chgEl.className   = cls;
 
