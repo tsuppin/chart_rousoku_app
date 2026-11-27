@@ -153,56 +153,19 @@
     }
     #price-chg { font-size: 11px; font-family: 'Roboto Mono', monospace; white-space: nowrap; }
 
-    .ohlcv { display: flex; gap: 6px; flex-shrink: 1; min-width: 0; overflow: hidden; }
-    .oitem  { display: flex; flex-direction: column; min-width: 0; flex-shrink: 1; }
+    .ohlcv {
+      display: flex; gap: 8px; flex-shrink: 0; min-width: 0;
+      overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
+      -webkit-overflow-scrolling: touch; margin-bottom: 3px;
+    }
+    .ohlcv::-webkit-scrollbar { display: none; }
+    .oitem  { display: flex; flex-direction: column; min-width: 0; flex-shrink: 0; }
     .olbl   { font-size: 8px; color: var(--dim); white-space: nowrap; }
-    .oval   { font-size: 11px; font-family: 'Roboto Mono', monospace; white-space: nowrap; }
+    .oval   { font-size: 11px; font-family: 'Roboto Mono', monospace; white-space: nowrap; color: var(--bright); }
 
     .up   { color: var(--up)   !important; }
     .down { color: var(--down) !important; }
     .neu  { color: var(--text) !important; }
-
-    /* =========================================================
-       MA凡例バー
-    ========================================================= */
-    #ma-legend {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 1px 8px;
-      background: var(--panel);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-      flex-wrap: nowrap;
-      overflow-x: auto;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
-      line-height: 1.1;
-    }
-    #ma-legend::-webkit-scrollbar { display: none; }
-    #ma-legend .lbl { font-size: 10px; color: var(--dim); line-height: 1.1; flex-shrink: 0; }
-
-    .ma-entry {
-      display: flex;
-      align-items: center;
-      gap: 3px;
-      cursor: pointer;
-      padding: 1px 3px;
-      border-radius: 3px;
-      transition: background 0.12s;
-      flex-shrink: 0;
-      line-height: 1.1;
-    }
-    .ma-entry:hover { background: var(--hover); }
-    .ma-entry.off   { opacity: 0.3; }
-
-    .ma-dash { width: 12px; height: 2px; border-radius: 1px; flex-shrink: 0; }
-    .ma-entry span {
-      font-size: 10px;
-      font-family: 'Roboto Mono', monospace;
-      white-space: nowrap;
-      line-height: 1.1;
-    }
 
     /* =========================================================
        メインエリア＆チャートラッパー
@@ -490,6 +453,11 @@
     }
     .btn:hover  { background: var(--active); box-shadow: 0 2px 6px rgba(0,0,0,.35); }
     .btn:active { transform: translateY(1px); box-shadow: none; }
+    #btn-prev, #btn-next {
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
 
     .btn.primary {
       background: linear-gradient(135deg, var(--accent2), var(--accent));
@@ -727,14 +695,6 @@
       .oval { font-size: 10px; }
       .vdiv { display: none; }
 
-      /* MA凡例バーをスクロール可能＆コンパクトに */
-      #ma-legend { flex-wrap: nowrap; overflow-x: auto; padding: 1px 4px; gap: 2px; }
-      #ma-legend::-webkit-scrollbar { display: none; }
-      #ma-legend .lbl { font-size: 9px; }
-      .ma-entry { padding: 1px 2px; gap: 2px; flex-shrink: 0; }
-      .ma-dash { width: 9px; }
-      .ma-entry span { font-size: 10px; }
-
       /* フッターをモバイル向け2段固定レイアウトに */
       #footer {
         padding: 4px 6px;
@@ -893,13 +853,6 @@
     <select id="stock-select" onchange="switchStock(this.value)"></select>
     <button id="btn-random" onclick="pickRandomStock()" title="選択中のカテゴリからランダム表示">🎲</button>
   </div>
-      <div class="ohlcv">
-        <div class="oitem"><span class="olbl">高値</span><span class="oval" id="v-high">---</span></div>
-        <div class="oitem"><span class="olbl">安値</span><span class="oval" id="v-low">---</span></div>
-        <div class="oitem"><span class="olbl">始値</span><span class="oval" id="v-open">---</span></div>
-        <div class="oitem"><span class="olbl">終値</span><span class="oval" id="v-close">---</span></div>
-        <div class="oitem"><span class="olbl">出来高</span><span class="oval" id="v-vol">---</span></div>
-      </div>
   </div>
 
   <div class="vdiv"></div>
@@ -913,64 +866,6 @@
       <span id="cur-price" class="neu">---</span>
       <span id="price-chg" class="neu">---</span>
     </div>
-  </div>
-</div>
-
-<!-- ====================================================
-     MA 凡例バー（クリックでON/OFF）
-==================================================== -->
-<div id="ma-legend">
-  <span class="lbl">MA</span>
-  <div class="ma-entry" id="mae-3"   onclick="toggleMA(3)">
-    <div class="ma-dash" style="background:var(--ma3)"></div>
-    <span id="ma3t"   style="color:var(--ma3)"  >MA3:---</span>
-  </div>
-  <div class="ma-entry" id="mae-5"   onclick="toggleMA(5)">
-    <div class="ma-dash" style="background:var(--ma5)"></div>
-    <span id="ma5t"   style="color:var(--ma5)"  >MA5:---</span>
-  </div>
-  <div class="ma-entry" id="mae-7"   onclick="toggleMA(7)">
-    <div class="ma-dash" style="background:var(--ma7)"></div>
-    <span id="ma7t"   style="color:var(--ma7)"  >MA7:---</span>
-  </div>
-  <div class="ma-entry" id="mae-10"  onclick="toggleMA(10)">
-    <div class="ma-dash" style="background:var(--ma10)"></div>
-    <span id="ma10t"  style="color:var(--ma10)" >MA10:---</span>
-  </div>
-  <div class="ma-entry" id="mae-14"  onclick="toggleMA(14)">
-    <div class="ma-dash" style="background:var(--ma14)"></div>
-    <span id="ma14t"  style="color:var(--ma14)" >MA14:---</span>
-  </div>
-  <div class="ma-entry" id="mae-20"  onclick="toggleMA(20)">
-    <div class="ma-dash" style="background:var(--ma20)"></div>
-    <span id="ma20t"  style="color:var(--ma20)" >MA20:---</span>
-  </div>
-  <div class="ma-entry" id="mae-50"  onclick="toggleMA(50)">
-    <div class="ma-dash" style="background:var(--ma50)"></div>
-    <span id="ma50t"  style="color:var(--ma50)" >MA50:---</span>
-  </div>
-  <div class="ma-entry" id="mae-100" onclick="toggleMA(100)">
-    <div class="ma-dash" style="background:var(--ma100)"></div>
-    <span id="ma100t" style="color:var(--ma100)">MA100:---</span>
-  </div>
-  <div class="ma-entry" id="mae-300" onclick="toggleMA(300)">
-    <div class="ma-dash" style="background:var(--ma300)"></div>
-    <span id="ma300t" style="color:var(--ma300)">MA300:---</span>
-  </div>
-
-  <div class="vdiv" style="height:10px; margin:0 2px"></div>
-  <span class="lbl">表示</span>
-
-  <!-- ローソク足 表示/非表示 -->
-  <div class="ma-entry" id="tog-candle" onclick="toggleCandle()">
-    <div style="width:10px; height:8px; border:1.5px solid #f23645; background:rgba(242,54,69,0.25); border-radius:1px; flex-shrink:0"></div>
-    <span style="color:var(--text)">ローソク</span>
-  </div>
-
-  <!-- 終値ライン 表示/非表示 -->
-  <div class="ma-entry off" id="tog-close" onclick="toggleClose()">
-    <div class="ma-dash" style="background:#9e9e9e"></div>
-    <span id="close-lbl" style="color:#9e9e9e">終値</span>
   </div>
 </div>
 
@@ -1000,7 +895,17 @@
   </div>
 
   <div id="trade-panel">
-    <div class="tp-section" id="ma-dev-section"><div id="ma-dev"></div><div id="ma-price"></div></div>
+    <div class="tp-section" id="ma-dev-section">
+      <div class="ohlcv">
+        <div class="oitem"><span class="olbl">高値</span><span class="oval" id="v-high">---</span></div>
+        <div class="oitem"><span class="olbl">安値</span><span class="oval" id="v-low">---</span></div>
+        <div class="oitem"><span class="olbl">始値</span><span class="oval" id="v-open">---</span></div>
+        <div class="oitem"><span class="olbl">終値</span><span class="oval" id="v-close">---</span></div>
+        <div class="oitem"><span class="olbl">出来高</span><span class="oval" id="v-vol">---</span></div>
+      </div>
+      <div id="ma-dev"></div>
+      <div id="ma-price"></div>
+    </div>
     <div class="tp-section" id="holding-section">
       <div class="tp-row">
         <span class="tp-lbl">評価損益</span>
@@ -1096,8 +1001,8 @@
     <!-- 日足バッジ -->
     <div id="footer-badge" style="font-size:11px; font-weight:700; color:#fff; background:var(--accent); padding:4px 8px; border-radius:4px; letter-spacing:.5px; flex-shrink:0; display: none;">日足</div>
 
-    <button class="btn"         id="btn-prev" onclick="goPrev()">◀ 前日</button>
-    <button class="btn primary" id="btn-next" onclick="goNext()">次日 ▶</button>
+    <button class="btn"         id="btn-prev">◀ 前日</button>
+    <button class="btn primary" id="btn-next">次日 ▶</button>
 
     <!-- 自動めくり -->
     <div id="auto-area">
@@ -3151,8 +3056,11 @@ let stepFramePending = false;
 function runThrottledStep(fn) {
   if (stepFramePending) return;
   stepFramePending = true;
-  fn();
-  requestAnimationFrame(() => { stepFramePending = false; });
+  try {
+    fn();
+  } finally {
+    requestAnimationFrame(() => { stepFramePending = false; });
+  }
 }
 
 /* ======================================================
@@ -3357,7 +3265,7 @@ function toggleMA(period) {
   maSeries[period].applyOptions({ visible: maVisible[period] });
   maSeriesW[period].applyOptions({ visible: maVisible[period] });
   maSeriesM[period].applyOptions({ visible: maVisible[period] });
-  document.getElementById(`mae-${period}`).classList.toggle('off', !maVisible[period]);
+  document.getElementById(`mae-${period}`)?.classList.toggle('off', !maVisible[period]);
   updateMADev(lastBarIdx);
   syncDisplayModal();
 }
@@ -3368,7 +3276,7 @@ function toggleCandle() {
   candleSeries.applyOptions({ visible: candleVisible });
   candleSeriesW.applyOptions({ visible: candleVisible });
   candleSeriesM.applyOptions({ visible: candleVisible });
-  document.getElementById('tog-candle').classList.toggle('off', !candleVisible);
+  document.getElementById('tog-candle')?.classList.toggle('off', !candleVisible);
   syncDisplayModal();
 }
 
@@ -3383,7 +3291,7 @@ function toggleClose() {
   closeSeries.applyOptions({ visible: closeVisible });
   closeSeriesW.applyOptions({ visible: closeVisible });
   closeSeriesM.applyOptions({ visible: closeVisible });
-  document.getElementById('tog-close').classList.toggle('off', !closeVisible);
+  document.getElementById('tog-close')?.classList.toggle('off', !closeVisible);
   syncDisplayModal();
 }
 
@@ -4360,47 +4268,58 @@ function copyHistoryAI() {
    モバイル対応（前日/次日ボタン長押し連続めくり ＆ スワイプヒント）
 ====================================================== */
 (function() {
-  // 前日・次日ボタンの長押し連続ステップ（スマホ・PC共通）
+  // 前日・次日ボタンの長押し連続ステップ（スマホ・タブレット・PC共通）
   function setupHoldButton(btnId, stepFn) {
     const btn = document.getElementById(btnId);
     if (!btn) return;
     let holdTimer = null;
     let repeatTimer = null;
-    let didRepeat = false;
+    let activePointerId = null;
 
     const stopHold = () => {
       if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
       if (repeatTimer) { clearInterval(repeatTimer); repeatTimer = null; }
+      if (activePointerId !== null) {
+        try { btn.releasePointerCapture(activePointerId); } catch (_) {}
+        activePointerId = null;
+      }
     };
 
     const startHold = (e) => {
-      if (e.type === 'mousedown' && e.button !== 0) return;
+      if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+      if (activePointerId !== null) return;
       stopAuto();
       stopHold();
-      didRepeat = false;
+      activePointerId = e.pointerId !== undefined ? e.pointerId : -1;
+      try {
+        if (e.pointerId !== undefined) btn.setPointerCapture(e.pointerId);
+      } catch (_) {}
+
+      // 押した瞬間にまず1日進める（または戻す）
+      stepFn();
+
+      // 300ms以上押し続けたら連続めくり開始
       holdTimer = setTimeout(() => {
-        didRepeat = true;
-        stepFn();
         repeatTimer = setInterval(() => {
           if (btn.disabled) { stopHold(); return; }
           runThrottledStep(stepFn);
         }, 55);
-      }, 320);
+      }, 300);
     };
 
-    btn.addEventListener('touchstart', startHold, { passive: true });
-    btn.addEventListener('touchend', stopHold, { passive: true });
-    btn.addEventListener('touchcancel', stopHold, { passive: true });
-    btn.addEventListener('mousedown', startHold);
-    window.addEventListener('mouseup', stopHold);
-    btn.addEventListener('mouseleave', stopHold);
+    btn.addEventListener('pointerdown', startHold);
+    btn.addEventListener('pointerup', stopHold);
+    btn.addEventListener('pointercancel', stopHold);
+    btn.addEventListener('lostpointercapture', stopHold);
+    window.addEventListener('blur', stopHold);
+    btn.addEventListener('contextmenu', e => e.preventDefault());
+    // キーボード操作（Enter / Space）でのクリック互換
     btn.addEventListener('click', e => {
-      if (didRepeat) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        didRepeat = false;
+      if (e.detail === 0) {
+        stopAuto();
+        stepFn();
       }
-    }, true);
+    });
   }
 
   setupHoldButton('btn-prev', goPrev);
