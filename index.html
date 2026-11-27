@@ -139,8 +139,11 @@
     #s-code   { font-size: 11px; color: var(--dim); }
     #s-name   { font-size: 13px; font-weight: 500; }
 
+    #price-row {
+      display: flex; align-items: center; margin-bottom: 3px;
+    }
     #price-group {
-      display: flex; align-items: baseline; gap: 4px; flex-shrink: 0; white-space: nowrap;
+      display: inline-flex; align-items: baseline; gap: 4px; flex-shrink: 0; white-space: nowrap;
       border: 1px solid var(--border); border-radius: 5px; padding: 2px 6px;
       transition: border-color 0.15s;
     }
@@ -157,7 +160,7 @@
     #price-chg { font-size: 10px; font-family: 'Roboto Mono', monospace; white-space: nowrap; }
 
     .ohlcv {
-      display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 0;
+      display: flex; align-items: center; gap: 6px; flex-shrink: 0; min-width: 0;
       overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none;
       -webkit-overflow-scrolling: touch; margin-bottom: 3px;
     }
@@ -249,6 +252,7 @@
       flex-direction: column;
       flex-shrink: 0;
       overflow-y: auto;
+      overflow-x: hidden;
     }
 
     .tp-section { padding: 8px 12px; border-bottom: 1px solid var(--border); }
@@ -261,40 +265,40 @@
     .tp-val.profit { color: var(--up); }
     .tp-val.loss { color: var(--down); }
 
-    .tp-actions { display: flex; gap: 6px; margin-top: 4px; }
+    .tp-actions { display: flex; justify-content: flex-start; gap: 6px; margin-top: 4px; }
     .tp-btn {
-      flex: 1; background: var(--hover); border: 1px solid var(--border);
-      color: var(--text); padding: 5px; font-size: 11px; border-radius: 5px;
+      flex: 0 0 auto; background: var(--hover); border: 1px solid var(--border);
+      color: var(--text); padding: 5px 8px; font-size: 11px; border-radius: 5px;
       cursor: pointer; transition: 0.15s; font-family: inherit;
-      height: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1;
+      height: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; white-space: nowrap;
     }
     .tp-btn:hover { background: var(--active); border-color: var(--accent); }
 
     .tp-pos-section { flex: 1; }
     .tp-pos-header { font-size: 12px; font-weight: 700; margin-bottom: 6px; text-align: center; color: var(--text); }
-    .tp-pos-grid { display: flex; justify-content: space-between; align-items: center; }
+    .tp-pos-grid { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
     
-    .tp-pos-col { display: flex; flex-direction: column; align-items: center; width: 56px; }
-    .tp-pos-title { font-size: 12px; margin-bottom: 4px; font-weight: 700; }
+    .tp-pos-col { display: flex; flex-direction: column; align-items: center; width: 56px; flex: 1; min-width: 0; }
+    .tp-pos-title { font-size: 12px; margin-bottom: 4px; font-weight: 700; flex-shrink: 0; }
     .down-color { color: var(--down); }
     .up-color { color: var(--up); }
     
     .tp-arrow {
       background: var(--hover); border: 1px solid var(--border); color: var(--text);
-      width: 100%; height: 28px; display: flex; align-items: center; justify-content: center;
+      flex: 1; min-width: 30px; max-width: 56px; height: 28px; display: flex; align-items: center; justify-content: center;
       border-radius: 5px; cursor: pointer; font-size: 13px; transition: 0.1s;
     }
     .tp-arrow:hover { background: var(--active); transform: scale(1.05); }
     .tp-arrow:active { transform: scale(0.95); }
     
-    .tp-pos-count { font-size: 22px; font-weight: 700; font-family: 'Roboto Mono', monospace; margin: 4px 0; }
+    .tp-pos-count { font-size: 22px; font-weight: 700; font-family: 'Roboto Mono', monospace; margin: 4px 0; flex-shrink: 0; }
     
-    .tp-pos-center { display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 8px; flex: 1; }
+    .tp-pos-center { display: flex; flex-direction: row; justify-content: center; align-items: center; gap: 6px; flex: 0 0 auto; }
     .tp-ratio { font-size: 16px; font-weight: 700; letter-spacing: 2px; margin: 0; font-family: 'Roboto Mono', monospace; }
     .tp-btn-settle {
       background: transparent; border: 1px solid var(--accent); color: var(--accent);
-      padding: 5px 10px; font-size: 11px; font-weight: 700; border-radius: 5px;
-      cursor: pointer; transition: 0.15s;
+      padding: 5px 8px; font-size: 11px; font-weight: 700; border-radius: 5px;
+      cursor: pointer; transition: 0.15s; white-space: nowrap; flex-shrink: 0;
     }
     .tp-btn-settle:hover { background: var(--accent); color: #fff; }
 
@@ -311,15 +315,12 @@
       display: flex;
       justify-content: flex-start;
       align-items: center;
-      gap: 8px;
+      gap: 4px 8px;
       font-size: 11px;
       color: var(--dim);
       min-height: 24px;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
       white-space: nowrap;
-      overflow-x: auto;
-      scrollbar-width: none;
-      -ms-overflow-style: none;
     }
     .tp-opts::-webkit-scrollbar { display: none; }
     .tp-opts label { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -606,6 +607,7 @@
     .m-btn  {
       flex: 1; padding: 9px; border-radius: 7px; border: 1px solid var(--border);
       font-family: inherit; font-size: 13px; cursor: pointer; transition: all .12s;
+      white-space: nowrap;
     }
     .m-btn.cancel { background: var(--hover); color: var(--dim); }
     .m-btn.cancel:hover { color: var(--text); }
@@ -683,7 +685,7 @@
       #stock-search { width: 90px; font-size: 12px; }
       #stock-select { max-width: 165px; font-size: 12px; }
       #trade-panel { width: 270px; }
-      .tp-btn { font-size: 10.5px; padding: 4px; }
+      .tp-btn { font-size: 10.5px; padding: 4px 7px; }
     }
 
     @media (max-width: 600px), (orientation: portrait) {
@@ -713,15 +715,16 @@
         width: 100%;
       }
       #footer-row1 { margin-bottom: 4px; }
-      #footer-row2 { flex-wrap: nowrap; }
+      #footer-row2 { flex-wrap: nowrap; gap: 4px; }
       .btn { padding: 8px 10px; font-size: 13px; min-height: 40px; }
       #btn-prev, #btn-next { flex: 1; }
-      #date-badge { font-size: 11px; padding: 6px 8px; min-width: unset; min-height: 36px; display:flex; align-items:center; justify-content:center; flex:1; }
+      #date-badge { font-size: 11px; padding: 6px 4px; min-width: 0; min-height: 36px; display:flex; align-items:center; justify-content:center; flex:1; white-space: nowrap; }
       #btn-auto { min-height: 40px; padding: 8px 10px; font-size: 13px; }
       .spd-btn { padding: 6px 8px; font-size: 11px; min-height: 36px; }
-      .wbtn { padding: 6px 8px; font-size: 11px; min-height: 36px; }
+      .wbtn { padding: 6px 4px; width: 34px; font-size: 11px; min-height: 36px; }
       #key-hint { display: none; } /* スマホではキーヒント非表示 */
-      #win-sel { gap: 3px; flex-shrink: 0; }
+      #win-sel { gap: 3px; flex-shrink: 0; margin-left: 0; }
+      #win-sel.view-sel { width: 108px; }
       #auto-area { gap: 3px; flex: 1; }
       #footer .vdiv { display: none; }
       #footer-badge { font-size: 10px; font-weight: 700; flex-shrink: 0; }
@@ -741,8 +744,7 @@
       }
 
       /* PNL・保有株数セクション：横一列に圧縮 */
-      #trade-panel #pnl-section,
-      #trade-panel #holding-section {
+      #trade-panel #pnl-section {
         min-height: 0;
         padding: 3px 8px;
         display: flex;
@@ -757,9 +759,31 @@
         border-bottom: 1px solid var(--border);
         flex-shrink: 0;
       }
+      #trade-panel #holding-section {
+        min-height: 0;
+        padding: 4px 8px;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+      }
       #trade-panel #pnl-section::-webkit-scrollbar,
-      #trade-panel #holding-section::-webkit-scrollbar { display: none; }
-      #trade-panel #holding-section { gap: 8px; }
+      #trade-panel .tp-pnl-rows::-webkit-scrollbar,
+      #trade-panel .tp-actions::-webkit-scrollbar { display: none; }
+      #trade-panel .tp-pnl-rows {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: nowrap;
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
       #trade-panel .tp-row {
         margin-bottom: 0;
         flex-shrink: 0;
@@ -775,6 +799,12 @@
         margin-left: 0;
         flex-shrink: 0;
         gap: 4px;
+        width: 100%;
+        justify-content: flex-start;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
       }
       #trade-panel .tp-btn { font-size: 10px; padding: 0 10px; height: 28px; display: inline-flex; align-items: center; justify-content: center; line-height: 1; white-space: nowrap; }
       #ma-dev-section { padding: 3px 8px; }
@@ -890,11 +920,13 @@
 
   <div id="trade-panel">
     <div class="tp-section" id="ma-dev-section">
-      <div class="ohlcv">
+      <div id="price-row">
         <div id="price-group" class="neu">
           <span id="cur-price" class="neu">---</span>
           <span id="price-chg" class="neu">---</span>
         </div>
+      </div>
+      <div class="ohlcv">
         <div class="oitem"><span class="olbl">高値</span><span class="oval" id="v-high">---</span></div>
         <div class="oitem"><span class="olbl">安値</span><span class="oval" id="v-low">---</span></div>
         <div class="oitem"><span class="olbl">始値</span><span class="oval" id="v-open">---</span></div>
@@ -905,13 +937,15 @@
       <div id="ma-price"></div>
     </div>
     <div class="tp-section" id="holding-section">
-      <div class="tp-row">
-        <span class="tp-lbl">評価損益</span>
-        <span class="tp-val" id="unrealized-pnl">0円</span>
-      </div>
-      <div class="tp-row">
-        <span class="tp-lbl">確定利益</span>
-        <span class="tp-val" id="realized-pnl">0円</span>
+      <div class="tp-pnl-rows">
+        <div class="tp-row">
+          <span class="tp-lbl">評価損益</span>
+          <span class="tp-val" id="unrealized-pnl">0円</span>
+        </div>
+        <div class="tp-row">
+          <span class="tp-lbl">確定利益</span>
+          <span class="tp-val" id="realized-pnl">0円</span>
+        </div>
       </div>
       <div class="tp-actions">
         <button class="tp-btn" onclick="showHistory()">🕒 取引履歴</button>
@@ -939,11 +973,11 @@
       
       <div class="tp-pos-grid">
         <!-- 売り: タイトル + ▲数字▼ を横並び -->
-        <div class="tp-pos-col" style="flex-direction: row; align-items: center; gap: 4px; width: auto;">
+        <div class="tp-pos-col" style="flex-direction: row; align-items: center; gap: 3px;">
           <div class="tp-pos-title down-color" style="margin-bottom: 0;">売</div>
-          <button class="tp-arrow" onclick="changePos('sell', 1)" style="width: 70px; height: 28px;">▲</button>
+          <button class="tp-arrow" onclick="changePos('sell', 1)">▲</button>
           <div class="tp-pos-count down-color" id="pos-sell" style="font-size: 18px; margin: 0 2px; min-width: 14px; text-align: center;">0</div>
-          <button class="tp-arrow" onclick="changePos('sell', -1)" style="width: 70px; height: 28px;">▼</button>
+          <button class="tp-arrow" onclick="changePos('sell', -1)">▼</button>
           <div style="font-size: 9px; color: var(--dim); display: none;" id="avg-sell-price">avg: -</div>
         </div>
         
@@ -952,10 +986,10 @@
         </div>
 
         <!-- 買い: タイトル + ▲数字▼ を横並び -->
-        <div class="tp-pos-col" style="flex-direction: row; align-items: center; gap: 4px; width: auto;">
-          <button class="tp-arrow" onclick="changePos('buy', -1)" style="width: 70px; height: 28px;">▼</button>
+        <div class="tp-pos-col" style="flex-direction: row; align-items: center; gap: 3px;">
+          <button class="tp-arrow" onclick="changePos('buy', -1)">▼</button>
           <div class="tp-pos-count up-color" id="pos-buy" style="font-size: 18px; margin: 0 2px; min-width: 14px; text-align: center;">0</div>
-          <button class="tp-arrow" onclick="changePos('buy', 1)" style="width: 70px; height: 28px;">▲</button>
+          <button class="tp-arrow" onclick="changePos('buy', 1)">▲</button>
           <div class="tp-pos-title up-color" style="margin-bottom: 0;">買</div>
           <div style="font-size: 9px; color: var(--dim); display: none;" id="avg-buy-price">avg: -</div>
         </div>
